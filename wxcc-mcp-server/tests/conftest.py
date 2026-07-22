@@ -1,7 +1,9 @@
-"""Pytest fixtures with mocked WxCC API responses.
+"""Pytest fixtures with mocked WxCC Config API responses.
 
 Tests never hit live APIs: an ``httpx.MockTransport`` serves canned JSON, and a
-fake token broker returns a placeholder token (never a real credential).
+fake token broker returns a placeholder token (never a real credential). The
+mocked handler covers the address book, entry, desktop profile, and user
+endpoints used by the address-book sync scenario.
 """
 
 from __future__ import annotations
@@ -29,76 +31,60 @@ class FakeBroker:
         return self.token
 
 
-# A dataset that produces an all-pass routing validation.
+# A dataset aligned to the CRM fixture (crm-1001..crm-1007) so sync tests have a
+# deterministic diff: e1 unchanged, e2 name changed, e3 absent from CRM.
 DEFAULT_DATASET: dict[str, Any] = {
-    "user": {
-        "id": "u1",
-        "email": "agent@example.com",
-        "displayName": "Agent One",
-        "active": True,
-        "licenses": [{"id": "lic1", "name": "CC Premium"}],
-        "lastModified": "2026-07-01T10:00:00Z",
-        "teams": [{"id": "t1", "name": "Team Alpha"}],
-        "skillProfile": {
-            "id": "sp1",
-            "name": "Sales",
-            "skills": [{"name": "English", "type": "boolean", "values": ["true"]}],
+    "address_books": {
+        "ab1": {
+            "id": "ab1",
+            "name": "CRM — Enterprise Accounts",
+            "description": "Synced from CRM",
+            "parentType": "CUSTOMER",
         },
-        "agentProfile": "Default Agent Profile",
-        "multimediaProfile": {
-            "id": "mm1",
-            "name": "Standard",
-            "channelsEnabled": ["telephony"],
+        "ab2": {"id": "ab2", "name": "Site Book", "parentType": "SITE"},
+    },
+    "entries": {
+        "ab1": {
+            "e1": {
+                "id": "e1",
+                "name": "Acme Corp — Reception",
+                "number": "+14155550101",
+                "crmId": "crm-1001",
+            },
+            "e2": {
+                "id": "e2",
+                "name": "Acme Corp — Billing (OLD)",
+                "number": "+14155550102",
+                "crmId": "crm-1002",
+            },
+            "e3": {
+                "id": "e3",
+                "name": "Stale Contact",
+                "number": "+19998887777",
+            },
+        }
+    },
+    "profiles": {
+        "p1": {"id": "p1", "name": "Sales Desktop", "addressBookId": None},
+        "p2": {"id": "p2", "name": "Support Desktop", "addressBookId": "ab2"},
+    },
+    "agents": [
+        {"id": "a1", "email": "a1@example.com", "displayName": "Agent One", "agentProfileId": "p1"},
+        {"id": "a2", "email": "a2@example.com", "displayName": "Agent Two", "agentProfileId": "p1"},
+        {
+            "id": "a3",
+            "email": "a3@example.com",
+            "displayName": "Agent Three",
+            "agentProfileId": "p2",
         },
-    },
-    "teams": {
-        "t1": {
-            "name": "Team Alpha",
-            "site": "Site 1",
-            "members": [{"id": "u1", "name": "Agent One"}],
-            "queues": [{"id": "q1", "name": "Sales Queue"}],
-        }
-    },
-    "queues": {
-        "q1": {
-            "name": "Sales Queue",
-            "active": True,
-            "channelType": "telephony",
-            "requiredSkills": [{"name": "English", "type": "boolean", "values": ["true"]}],
-            "routingType": "LONGEST_AVAILABLE",
-        }
-    },
-    "skill_profiles": {
-        "sp1": {
-            "name": "Sales",
-            "skills": [{"name": "English", "type": "boolean", "values": ["true"]}],
-        }
-    },
-    "state_history": {
-        "items": [
-            {
-                "fromState": "Idle",
-                "toState": "Available",
-                "reasonCode": None,
-                "timestamp": "2026-07-01T09:00:00Z",
-            }
-        ]
-    },
-    "session": {
-        "items": [
-            {
-                "active": True,
-                "loginTimestamp": "2026-07-01T08:00:00Z",
-                "deviceType": "desktop",
-                "channels": ["telephony"],
-            }
-        ]
-    },
+        {
+            "id": "a4",
+            "email": "a4@example.com",
+            "displayName": "Agent Four",
+            "agentProfileId": None,
+        },
+    ],
 }
-
-
-def _last_segment(path: str) -> str:
-    return path.rstrip("/").rsplit("/", 1)[-1]
 
 
 def make_handler(
@@ -110,7 +96,7 @@ def make_handler(
     Args:
         dataset: Canned data (defaults to :data:`DEFAULT_DATASET`).
         errors: Map of category -> HTTP status to force, where category is one of
-            ``user``, ``team``, ``queue``, ``skill_profile``, ``state``, ``session``.
+            ``address_book``, ``entry``, ``profile``, ``user``.
     """
     data = copy.deepcopy(dataset if dataset is not None else DEFAULT_DATASET)
     errors = errors or {}
@@ -123,23 +109,66 @@ def make_handler(
             return httpx.Response(404, json={"message": "not found"})
         return httpx.Response(200, json=body)
 
+    def _address_book(parts: list[str], method: str) -> httpx.Response:
+        # parts: [organization, {org}, address-book, {ab_id?}, entry?, {eid|bulk}?]
+        books = data.get("address_books", {})
+        if len(parts) == 3:  # /address-book
+            if method == "POST":
+                return _err_or("address_book", {"id": "ab-new"})
+            return _err_or("address_book", list(books.values()))
+        ab_id = parts[3]
+        if len(parts) == 4:  # /address-book/{ab_id}
+            if method == "DELETE":
+                return _err_or("address_book", {})
+            if method == "PUT":
+                return _err_or("address_book", {"id": ab_id})
+            return _err_or("address_book", books.get(ab_id))
+        if len(parts) >= 5 and parts[4] == "entry":
+            entries = data.get("entries", {}).get(ab_id, {})
+            if len(parts) == 5:  # /entry
+                if method == "POST":
+                    return _err_or("entry", {"id": "e-new"})
+                return _err_or("entry", list(entries.values()))
+            tail = parts[5]
+            if tail == "bulk":  # /entry/bulk
+                return _err_or("entry", {"saved": True})
+            if method == "DELETE":
+                return _err_or("entry", {})
+            if method == "PUT":
+                return _err_or("entry", {"id": tail})
+            return _err_or("entry", entries.get(tail))
+        return httpx.Response(404, json={"message": "unmapped address-book path"})
+
+    def _profile(parts: list[str], method: str) -> httpx.Response:
+        profiles = data.get("profiles", {})
+        if len(parts) == 3:  # /agent-profile
+            return _err_or("profile", list(profiles.values()))
+        pid = parts[3]
+        if method == "PUT":
+            # Echo back the request body so field-preservation can be asserted.
+            return _err_or("profile", {"id": pid})
+        return _err_or("profile", profiles.get(pid))
+
+    def _user(parts: list[str], method: str) -> httpx.Response:
+        agents = data.get("agents", [])
+        if len(parts) == 3:  # /user
+            return _err_or("user", agents)
+        uid = parts[3]
+        match = next((a for a in agents if a.get("id") == uid), None)
+        return _err_or("user", match)
+
     def handler(request: httpx.Request) -> httpx.Response:
-        path = request.url.path
-        if path.endswith("/agent-state/search"):
-            return _err_or("state", data.get("state_history"))
-        if path.endswith("/agent-session/search"):
-            return _err_or("session", data.get("session"))
-        if "/contact-service-queue/" in path:
-            return _err_or("queue", data.get("queues", {}).get(_last_segment(path)))
-        if "/team/" in path:
-            return _err_or("team", data.get("teams", {}).get(_last_segment(path)))
-        if "/skill-profile/" in path:
-            return _err_or("skill_profile", data.get("skill_profiles", {}).get(_last_segment(path)))
-        if path.endswith("/user"):
-            # Search by email -> list wrapper.
-            return _err_or("user", {"items": [data["user"]]} if data.get("user") else None)
-        if "/user/" in path:
-            return _err_or("user", data.get("user"))
+        parts = [p for p in request.url.path.split("/") if p]
+        method = request.method
+        if len(parts) < 3 or parts[0] != "organization":
+            return httpx.Response(404, json={"message": "unmapped path"})
+        resource = parts[2]
+        if resource == "address-book":
+            return _address_book(parts, method)
+        if resource == "agent-profile":
+            return _profile(parts, method)
+        if resource == "user":
+            return _user(parts, method)
         return httpx.Response(404, json={"message": "unmapped path"})
 
     return handler
@@ -164,7 +193,7 @@ def broker() -> FakeBroker:
 
 @pytest.fixture
 async def client(broker: FakeBroker):
-    """Return an all-pass mocked client, closing it after the test."""
+    """Return a mocked client over the default dataset, closing it after the test."""
     c, _ = build_client(make_handler(), broker)
     yield c
     await c.aclose()
@@ -175,7 +204,7 @@ def client_factory():
     """Return a factory to build clients with custom dataset/errors.
 
     Usage:
-        client = client_factory(dataset=..., errors={"state": 403})
+        client = client_factory(dataset=..., errors={"entry": 403})
     """
     created: list[WxccApiClient] = []
 

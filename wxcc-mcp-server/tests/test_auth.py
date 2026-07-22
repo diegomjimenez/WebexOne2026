@@ -15,6 +15,7 @@ def _settings(tmp_path) -> Settings:
     return Settings(
         token_store_dir=str(tmp_path / "tokens"),
         token_encryption_key="",  # ephemeral key path
+        access_token="",  # ignore any developer .env static token; exercise the OAuth path
     )
 
 

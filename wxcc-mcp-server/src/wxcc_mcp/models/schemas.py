@@ -3,18 +3,38 @@
 These models are the typed contract between the MCP tools and the model. They
 double as JSON schema sources for MCP and as fixtures for tests. No model here
 carries token material — tokens never appear in tool inputs or outputs.
+
+Scope: this lab server implements a single scenario — synchronizing CRM contacts
+into a Webex Contact Center **Address Book** and provisioning it for agents by
+attaching it to a **Desktop Profile**. All models pertain to that scenario and
+live in the WxCC Config API family.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
-from enum import StrEnum
+import re
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # ---------------------------------------------------------------------------
-# Shared / common models
+# Shared / common models + validation
 # ---------------------------------------------------------------------------
+
+# E.164: a leading '+' followed by up to 15 digits, first digit non-zero.
+_E164_RE = re.compile(r"^\+[1-9]\d{1,14}$")
+
+
+def normalize_e164(value: str) -> str:
+    """Normalize and validate an E.164 phone number.
+
+    Strips spaces, hyphens, and parentheses, then enforces the E.164 shape via
+    an allow-list regex. Raises ``ValueError`` on anything that is not valid
+    E.164 so invalid input is rejected before any API call.
+    """
+    cleaned = re.sub(r"[\s\-()]", "", value or "")
+    if not _E164_RE.match(cleaned):
+        raise ValueError(f"Phone number {value!r} is not valid E.164 (e.g. +14155551234).")
+    return cleaned
 
 
 class OrgScopedInput(BaseModel):
@@ -23,250 +43,257 @@ class OrgScopedInput(BaseModel):
     org_id: str = Field(..., description="Webex Contact Center organization id.")
 
 
-class License(BaseModel):
-    """A license assigned to a user."""
+class WriteInput(OrgScopedInput):
+    """Base for write inputs.
 
-    id: str = Field(..., description="License id.")
-    name: str | None = Field(default=None, description="Human-readable license name.")
+    ``confirm`` remains as a fallback for MCP clients that do not support
+    elicitation. When elicitation IS available, the tool asks the user to
+    approve interactively regardless of this flag.
+    """
 
-
-class Skill(BaseModel):
-    """A single skill within a skill profile."""
-
-    name: str = Field(..., description="Skill name.")
-    type: str = Field(..., description="Skill type, e.g. text, boolean, proficiency, enum.")
-    values: list[str] = Field(
-        default_factory=list, description="Configured value(s) for the skill."
+    confirm: bool = Field(
+        default=False,
+        description="Fallback commit flag for clients without elicitation support.",
     )
 
 
-class SkillProfileSummary(BaseModel):
-    """A user's skill profile as seen from their config."""
+class WriteOutput(BaseModel):
+    """Result of a write tool: either a dry-run preview or a committed change."""
 
-    profile_id: str | None = Field(default=None, description="Skill profile id.")
-    profile_name: str | None = Field(default=None, description="Skill profile name.")
-    skills: list[Skill] = Field(default_factory=list, description="Skills in the profile.")
+    committed: bool = False
+    dry_run: bool = True
+    resource_id: str | None = None
+    message: str | None = None
+    preview: dict | None = None
+    result: dict | None = None
 
 
-class MultimediaProfile(BaseModel):
-    """A user's multimedia profile."""
+# ---------------------------------------------------------------------------
+# Address Books
+# ---------------------------------------------------------------------------
 
-    profile_id: str | None = Field(default=None, description="Multimedia profile id.")
-    profile_name: str | None = Field(default=None, description="Multimedia profile name.")
-    channels_enabled: list[str] = Field(
-        default_factory=list,
-        description="Channels enabled for the user, e.g. telephony, chat, email.",
+
+class AddressBookItem(BaseModel):
+    """An address book summary."""
+
+    address_book_id: str = Field(..., description="Address book id.")
+    name: str | None = Field(default=None, description="Address book name.")
+    description: str | None = Field(default=None, description="Address book description.")
+    parent_type: str | None = Field(
+        default=None, description="Availability scope: e.g. CUSTOMER (org-wide) or SITE."
     )
 
 
-class TeamRef(BaseModel):
-    """A lightweight reference to a team."""
+class ListAddressBooksInput(OrgScopedInput):
+    """Input for ``list_address_books``."""
 
-    team_id: str = Field(..., description="Team id.")
-    team_name: str | None = Field(default=None, description="Team name.")
+    max_results: int = Field(
+        default=100, ge=1, le=100, description="Maximum address books to return (API cap 100)."
+    )
 
 
-class QueueRef(BaseModel):
-    """A lightweight reference to a queue."""
+class ListAddressBooksOutput(BaseModel):
+    """Output for ``list_address_books``."""
 
-    queue_id: str = Field(..., description="Queue id.")
-    queue_name: str | None = Field(default=None, description="Queue name.")
+    org_id: str
+    total_returned: int
+    address_books: list[AddressBookItem] = Field(default_factory=list)
+
+
+class GetAddressBookInput(OrgScopedInput):
+    """Input for ``get_address_book``."""
+
+    address_book_id: str = Field(..., description="Address book id.")
+
+
+class CreateAddressBookInput(WriteInput):
+    """Input for ``create_address_book``."""
+
+    name: str = Field(..., description="Address book name (required).")
+    parent_type: str = Field(
+        ..., description="Availability scope (required): e.g. CUSTOMER or SITE."
+    )
+    description: str | None = Field(default=None, description="Optional description.")
+
+
+class UpdateAddressBookInput(WriteInput):
+    """Input for ``update_address_book``."""
+
+    address_book_id: str = Field(..., description="Address book id to update.")
+    name: str | None = Field(default=None, description="Updated name.")
+    description: str | None = Field(default=None, description="Updated description.")
+
+
+class DeleteAddressBookInput(WriteInput):
+    """Input for ``delete_address_book``."""
+
+    address_book_id: str = Field(..., description="Address book id to delete.")
 
 
 # ---------------------------------------------------------------------------
-# 1. get_user
+# Address Book Entries
 # ---------------------------------------------------------------------------
 
 
-class GetUserInput(OrgScopedInput):
-    """Input for ``get_user``."""
+class EntryItem(BaseModel):
+    """An address book entry (a dialable contact)."""
 
-    identifier: str = Field(..., description="User email address or user id.")
+    entry_id: str = Field(default="", description="Entry id.")
+    name: str | None = Field(default=None, description="Contact name.")
+    number: str | None = Field(default=None, description="Phone number (E.164).")
+    crm_id: str | None = Field(
+        default=None, description="Originating CRM id, if stored as an attribute."
+    )
 
 
-class GetUserOutput(BaseModel):
-    """Output for ``get_user``."""
+class ListEntriesInput(OrgScopedInput):
+    """Input for ``list_entries``."""
+
+    address_book_id: str = Field(..., description="Address book id.")
+    search: str | None = Field(default=None, description="Search keyword.")
+    filter: str | None = Field(default=None, description="RSQL filter expression.")
+    attributes: str | None = Field(
+        default=None, description="Comma-separated attributes to return (id,name,number)."
+    )
+    page: int = Field(default=0, ge=0, description="Page number (starts at 0).")
+    page_size: int = Field(default=100, ge=1, le=100, description="Items per page (cap 100).")
+
+
+class ListEntriesOutput(BaseModel):
+    """Output for ``list_entries``."""
+
+    org_id: str
+    address_book_id: str
+    total_returned: int
+    entries: list[EntryItem] = Field(default_factory=list)
+
+
+class GetEntryInput(OrgScopedInput):
+    """Input for ``get_entry``."""
+
+    address_book_id: str = Field(..., description="Address book id.")
+    entry_id: str = Field(..., description="Entry id.")
+
+
+class CreateEntryInput(WriteInput):
+    """Input for ``create_entry``."""
+
+    address_book_id: str = Field(..., description="Address book id.")
+    name: str = Field(..., description="Contact name (required).")
+    number: str = Field(..., description="Phone number in E.164 (required).")
+    crm_id: str | None = Field(default=None, description="Optional originating CRM id.")
+
+    @field_validator("number")
+    @classmethod
+    def _validate_number(cls, value: str) -> str:
+        return normalize_e164(value)
+
+
+class UpdateEntryInput(WriteInput):
+    """Input for ``update_entry``."""
+
+    address_book_id: str = Field(..., description="Address book id.")
+    entry_id: str = Field(..., description="Entry id to update.")
+    name: str | None = Field(default=None, description="Updated name.")
+    number: str | None = Field(default=None, description="Updated phone number (E.164).")
+
+    @field_validator("number")
+    @classmethod
+    def _validate_number(cls, value: str | None) -> str | None:
+        return normalize_e164(value) if value is not None else None
+
+
+class DeleteEntryInput(WriteInput):
+    """Input for ``delete_entry``."""
+
+    address_book_id: str = Field(..., description="Address book id.")
+    entry_id: str = Field(..., description="Entry id to delete.")
+
+
+class EntryInput(BaseModel):
+    """A single entry payload used by bulk save and sync."""
+
+    name: str = Field(..., description="Contact name.")
+    number: str = Field(..., description="Phone number in E.164.")
+    crm_id: str | None = Field(default=None, description="Optional originating CRM id.")
+
+    @field_validator("number")
+    @classmethod
+    def _validate_number(cls, value: str) -> str:
+        return normalize_e164(value)
+
+
+class BulkSaveEntriesInput(WriteInput):
+    """Input for ``bulk_save_entries``."""
+
+    address_book_id: str = Field(..., description="Address book id.")
+    entries: list[EntryInput] = Field(
+        default_factory=list, description="Entries to create or upsert in bulk."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Desktop Profiles
+# ---------------------------------------------------------------------------
+
+
+class DesktopProfileItem(BaseModel):
+    """A desktop profile summary (deprecated dial-plan fields intentionally omitted)."""
+
+    profile_id: str = Field(..., description="Desktop profile id.")
+    name: str | None = Field(default=None, description="Desktop profile name.")
+    address_book_id: str | None = Field(
+        default=None, description="Currently assigned address book id, if any."
+    )
+
+
+class ListDesktopProfilesInput(OrgScopedInput):
+    """Input for ``list_desktop_profiles``."""
+
+    max_results: int = Field(default=100, ge=1, le=100, description="Max profiles (cap 100).")
+
+
+class ListDesktopProfilesOutput(BaseModel):
+    """Output for ``list_desktop_profiles``."""
+
+    org_id: str
+    total_returned: int
+    profiles: list[DesktopProfileItem] = Field(default_factory=list)
+
+
+class GetDesktopProfileInput(OrgScopedInput):
+    """Input for ``get_desktop_profile``."""
+
+    profile_id: str = Field(..., description="Desktop profile id.")
+
+
+class AssignAddressBookInput(WriteInput):
+    """Input for ``assign_address_book_to_profile``."""
+
+    profile_id: str = Field(..., description="Desktop profile id to update.")
+    address_book_id: str = Field(..., description="Address book id to assign.")
+
+
+# ---------------------------------------------------------------------------
+# Agents (read-only discovery)
+# ---------------------------------------------------------------------------
+
+
+class AgentSummary(BaseModel):
+    """A brief summary of one agent/user with its desktop profile assignment."""
 
     user_id: str
     email: str | None = None
     display_name: str | None = None
-    active: bool = False
-    licenses: list[License] = Field(default_factory=list)
-    last_modified: datetime | None = None
-
-
-# ---------------------------------------------------------------------------
-# 2. get_user_config
-# ---------------------------------------------------------------------------
-
-
-class GetUserConfigInput(OrgScopedInput):
-    """Input for ``get_user_config``."""
-
-    user_id: str = Field(..., description="User id.")
-
-
-class GetUserConfigOutput(BaseModel):
-    """Output for ``get_user_config``."""
-
-    user_id: str
-    teams: list[TeamRef] = Field(default_factory=list)
-    skill_profile: SkillProfileSummary | None = None
-    agent_profile: str | None = Field(
-        default=None, description="Agent profile name or id assigned to the user."
+    desktop_profile_id: str | None = Field(
+        default=None, description="Assigned desktop profile id, if any."
     )
-    multimedia_profile: MultimediaProfile | None = None
-
-
-# ---------------------------------------------------------------------------
-# 3. get_agent_state_history
-# ---------------------------------------------------------------------------
-
-
-class StateTransition(BaseModel):
-    """A single agent state transition."""
-
-    from_state: str | None = None
-    to_state: str
-    reason_code: str | None = None
-    timestamp: datetime
-
-
-class GetAgentStateHistoryInput(OrgScopedInput):
-    """Input for ``get_agent_state_history``."""
-
-    user_id: str = Field(..., description="User id.")
-    lookback_minutes: int = Field(
-        default=120, ge=1, description="How far back to search state history, in minutes."
-    )
-
-
-class GetAgentStateHistoryOutput(BaseModel):
-    """Output for ``get_agent_state_history``."""
-
-    user_id: str
-    current_state: str | None = None
-    current_state_since: datetime | None = None
-    transitions: list[StateTransition] = Field(default_factory=list)
-
-
-# ---------------------------------------------------------------------------
-# 4. get_agent_login_session
-# ---------------------------------------------------------------------------
-
-
-class GetAgentLoginSessionInput(OrgScopedInput):
-    """Input for ``get_agent_login_session``."""
-
-    user_id: str = Field(..., description="User id.")
-
-
-class GetAgentLoginSessionOutput(BaseModel):
-    """Output for ``get_agent_login_session``."""
-
-    user_id: str
-    session_active: bool = False
-    last_login: datetime | None = None
-    device_type: str | None = Field(
-        default=None, description="Device/agent type, e.g. desktop, browser, extension."
-    )
-    channels: list[str] = Field(
-        default_factory=list, description="Channels the session is logged into."
-    )
-
-
-# ---------------------------------------------------------------------------
-# 5. get_team
-# ---------------------------------------------------------------------------
-
-
-class GetTeamInput(OrgScopedInput):
-    """Input for ``get_team``."""
-
-    team_id: str = Field(..., description="Team id.")
-
-
-class TeamMember(BaseModel):
-    """A member of a team."""
-
-    user_id: str
-    display_name: str | None = None
-
-
-class GetTeamOutput(BaseModel):
-    """Output for ``get_team``."""
-
-    team_id: str
-    team_name: str | None = None
-    site: str | None = None
-    members: list[TeamMember] = Field(default_factory=list)
-    associated_queues: list[QueueRef] = Field(default_factory=list)
-
-
-# ---------------------------------------------------------------------------
-# 6. get_queue
-# ---------------------------------------------------------------------------
-
-
-class GetQueueInput(OrgScopedInput):
-    """Input for ``get_queue``."""
-
-    queue_id: str = Field(..., description="Queue (Contact Service Queue) id.")
-
-
-class GetQueueOutput(BaseModel):
-    """Output for ``get_queue``."""
-
-    queue_id: str
-    queue_name: str | None = None
-    active: bool = False
-    channel_type: str | None = None
-    required_skills: list[Skill] = Field(default_factory=list)
-    routing_type: str | None = None
-
-
-# ---------------------------------------------------------------------------
-# 7. get_skill_profile
-# ---------------------------------------------------------------------------
-
-
-class GetSkillProfileInput(OrgScopedInput):
-    """Input for ``get_skill_profile``."""
-
-    profile_id: str = Field(..., description="Skill profile id.")
-
-
-class GetSkillProfileOutput(BaseModel):
-    """Output for ``get_skill_profile``."""
-
-    profile_id: str
-    profile_name: str | None = None
-    skills: list[Skill] = Field(default_factory=list)
-
-
-# ---------------------------------------------------------------------------
-# 8. list_agents
-# ---------------------------------------------------------------------------
 
 
 class ListAgentsInput(OrgScopedInput):
     """Input for ``list_agents``."""
 
-    max_results: int = Field(
-        default=100,
-        ge=1,
-        le=1000,
-        description="Maximum number of users to return (1–1000).",
-    )
-
-
-class AgentSummary(BaseModel):
-    """A brief summary of one agent/user."""
-
-    user_id: str
-    email: str | None = None
-    display_name: str | None = None
-    active: bool = False
+    max_results: int = Field(default=100, ge=1, le=100, description="Max agents (cap 100).")
 
 
 class ListAgentsOutput(BaseModel):
@@ -277,50 +304,87 @@ class ListAgentsOutput(BaseModel):
     agents: list[AgentSummary] = Field(default_factory=list)
 
 
+class GetAgentInput(OrgScopedInput):
+    """Input for ``get_agent``."""
+
+    identifier: str = Field(..., description="Agent (user) id.")
+
+
+class ProfileAgentMapInput(OrgScopedInput):
+    """Input for ``map_profiles_to_agents``."""
+
+    max_results: int = Field(default=100, ge=1, le=100)
+
+
+class ProfileAgentMapping(BaseModel):
+    """The agents assigned to a single desktop profile."""
+
+    profile_id: str
+    profile_name: str | None = None
+    address_book_id: str | None = None
+    agents: list[AgentSummary] = Field(default_factory=list)
+
+
+class ProfileAgentMapOutput(BaseModel):
+    """Output for ``map_profiles_to_agents``."""
+
+    org_id: str
+    mappings: list[ProfileAgentMapping] = Field(default_factory=list)
+    unassigned_agents: list[AgentSummary] = Field(default_factory=list)
+
+
 # ---------------------------------------------------------------------------
-# 9. validate_agent_routing (composite)
+# CRM source + composite sync
 # ---------------------------------------------------------------------------
 
 
-class CheckStatus(StrEnum):
-    """Outcome of an individual routing check."""
+class CrmContact(BaseModel):
+    """A contact record from the CRM source resource."""
 
-    PASS = "pass"
-    FAIL = "fail"
-    WARNING = "warning"
+    id: str = Field(..., description="Stable CRM contact id.")
+    name: str = Field(..., description="Contact name.")
+    number: str = Field(..., description="Phone number (E.164).")
 
-
-class RoutingCheck(BaseModel):
-    """The result of a single routing readiness check."""
-
-    check: str = Field(..., description="Stable identifier of the check.")
-    status: CheckStatus
-    detail: str = Field(..., description="Human-readable explanation and evidence.")
+    @field_validator("number")
+    @classmethod
+    def _validate_number(cls, value: str) -> str:
+        return normalize_e164(value)
 
 
-class BlockingIssue(BaseModel):
-    """A ranked blocking issue with supporting evidence."""
+class SyncCrmInput(WriteInput):
+    """Input for ``sync_crm_to_address_book``."""
 
-    check: str = Field(..., description="Identifier of the failing check.")
-    rank: int = Field(..., ge=1, description="1 = most likely blocking cause.")
-    summary: str = Field(..., description="Plain-language description of the issue.")
-    evidence: str = Field(..., description="Evidence gathered from the read tools.")
-    remediation: str | None = Field(
-        default=None,
-        description="Recommended fix. Flag if it would require a write action (not performed).",
+    address_book_id: str = Field(..., description="Target address book id.")
+    prune: bool = Field(
+        default=False,
+        description="If true, delete existing entries not present in the CRM source (HIGH risk).",
+    )
+    summarize: bool = Field(
+        default=False, description="Ask the client model to summarize the result (sampling)."
     )
 
 
-class ValidateAgentRoutingInput(OrgScopedInput):
-    """Input for ``validate_agent_routing``."""
+class SyncAction(BaseModel):
+    """A single planned or applied sync action."""
 
-    user_id: str = Field(..., description="User id to validate for routing readiness.")
+    action: str = Field(..., description="One of: create, update, delete, skip.")
+    name: str | None = None
+    number: str | None = None
+    entry_id: str | None = None
+    crm_id: str | None = None
+    reason: str | None = None
 
 
-class RoutingValidationResult(BaseModel):
-    """Output for ``validate_agent_routing``."""
+class SyncOutput(BaseModel):
+    """Output for ``sync_crm_to_address_book``."""
 
-    user_id: str
-    routing_valid: bool
-    checks: list[RoutingCheck] = Field(default_factory=list)
-    blocking_issues: list[BlockingIssue] = Field(default_factory=list)
+    address_book_id: str
+    committed: bool = False
+    dry_run: bool = True
+    to_create: int = 0
+    to_update: int = 0
+    to_delete: int = 0
+    skipped: int = 0
+    actions: list[SyncAction] = Field(default_factory=list)
+    message: str | None = None
+    llm_summary: str | None = None

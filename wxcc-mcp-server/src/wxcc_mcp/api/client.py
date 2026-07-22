@@ -55,11 +55,9 @@ class WxccApiClient:
         self._owns_http = http_client is None
 
     def _base_url(self, family: str) -> str:
-        """Return the base URL for the given API family."""
+        """Return the base URL for the given API family (Config only)."""
         if family == ApiFamily.CONFIG:
             return self._settings.config_api_base.rstrip("/")
-        if family == ApiFamily.REPORTING:
-            return self._settings.reporting_api_base.rstrip("/")
         raise WxccApiError(f"Unknown API family: {family}", family=family)
 
     async def _client(self) -> httpx.AsyncClient:
@@ -72,6 +70,74 @@ class WxccApiClient:
         if self._owns_http and self._http is not None:
             await self._http.aclose()
             self._http = None
+
+    async def put(
+        self,
+        family: str,
+        path: str,
+        session_id: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json_body: dict[str, Any] | None = None,
+    ) -> Any:
+        """Issue an authenticated PUT and return parsed JSON."""
+        return await self._request(
+            "PUT", family, path, session_id, params=params, json_body=json_body
+        )
+
+    async def patch(
+        self,
+        family: str,
+        path: str,
+        session_id: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json_body: dict[str, Any] | None = None,
+    ) -> Any:
+        """Issue an authenticated PATCH and return parsed JSON."""
+        return await self._request(
+            "PATCH", family, path, session_id, params=params, json_body=json_body
+        )
+
+    async def delete(
+        self,
+        family: str,
+        path: str,
+        session_id: str,
+        *,
+        params: dict[str, Any] | None = None,
+    ) -> Any:
+        """Issue an authenticated DELETE and return parsed JSON (or empty dict)."""
+        return await self._request("DELETE", family, path, session_id, params=params)
+
+    async def post(
+        self,
+        family: str,
+        path: str,
+        session_id: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json_body: dict[str, Any] | None = None,
+    ) -> Any:
+        """Issue an authenticated POST and return parsed JSON.
+
+        Args:
+            family: API family (``config`` or ``reporting``).
+            path: Path relative to the family base URL.
+            session_id: MCP session id used to resolve the bearer token.
+            params: Optional query parameters.
+            json_body: Optional JSON request body.
+
+        Returns:
+            The parsed JSON body.
+
+        Raises:
+            NotFoundError, InsufficientPermissionsError, RateLimitError,
+            WxccApiError: Mapped from non-2xx responses.
+        """
+        return await self._request(
+            "POST", family, path, session_id, params=params, json_body=json_body
+        )
 
     async def get(
         self,

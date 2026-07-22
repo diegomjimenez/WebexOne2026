@@ -8,6 +8,7 @@ so secrets never reach the logs.
 from __future__ import annotations
 
 import logging
+import sys
 from typing import Any
 
 import structlog
@@ -28,6 +29,21 @@ _SENSITIVE_KEYS = {
 _REDACTED = "***REDACTED***"
 
 
+class _TeeStream:
+    """Write to multiple streams simultaneously (e.g. stderr + log file)."""
+
+    def __init__(self, *streams: Any) -> None:
+        self._streams = streams
+
+    def write(self, data: str) -> None:
+        for s in self._streams:
+            s.write(data)
+
+    def flush(self) -> None:
+        for s in self._streams:
+            s.flush()
+
+
 def _redact(_logger: Any, _method: str, event_dict: dict[str, Any]) -> dict[str, Any]:
     """Redact sensitive values from a structlog event dict (shallow + headers)."""
     for key in list(event_dict.keys()):
@@ -43,14 +59,36 @@ def _redact(_logger: Any, _method: str, event_dict: dict[str, Any]) -> dict[str,
     return event_dict
 
 
-def configure_logging(level: str = "INFO") -> None:
+def configure_logging(level: str = "INFO", log_file: str = "") -> None:
     """Configure structlog + stdlib logging to emit redacted JSON logs.
 
     Args:
         level: Minimum log level name (e.g. ``INFO``, ``DEBUG``).
+        log_file: Optional path to a log file. When non-empty, log events are
+            also written to this file in append mode using the same JSON format
+            and secret redaction as stderr. A warning is emitted to stderr and
+            the file handler is skipped if the path is unwritable.
     """
     numeric_level = getattr(logging, level.upper(), logging.INFO)
-    logging.basicConfig(format="%(message)s", level=numeric_level)
+
+    # Determine the output stream for structlog events.
+    # PrintLoggerFactory writes directly (not through the stdlib root logger),
+    # so we tee to the log file at the stream level rather than via addHandler.
+    log_stream: Any = sys.stderr
+    if log_file:
+        try:
+            _file_obj = open(log_file, "a", encoding="utf-8")  # noqa: WPS515
+            log_stream = _TeeStream(sys.stderr, _file_obj)
+            # Also attach a FileHandler to the stdlib root logger so that
+            # third-party library logs (httpx, asyncio, etc.) go to the file too.
+            file_handler = logging.FileHandler(log_file, mode="a", encoding="utf-8")
+            file_handler.setLevel(numeric_level)
+            file_handler.setFormatter(logging.Formatter("%(message)s"))
+            logging.getLogger().addHandler(file_handler)
+        except OSError as exc:
+            logging.warning("log_file_unavailable: %s - %s", log_file, exc)
+
+    logging.basicConfig(format="%(message)s", level=numeric_level, stream=sys.stderr)
 
     structlog.configure(
         processors=[
@@ -61,7 +99,7 @@ def configure_logging(level: str = "INFO") -> None:
             structlog.processors.JSONRenderer(),
         ],
         wrapper_class=structlog.make_filtering_bound_logger(numeric_level),
-        logger_factory=structlog.PrintLoggerFactory(),
+        logger_factory=structlog.PrintLoggerFactory(file=log_stream),
         cache_logger_on_first_use=True,
     )
 

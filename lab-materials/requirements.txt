@@ -1,0 +1,5 @@
+# Tooling-only dependencies for building the WebexOne 2026 lab materials.
+# These are NOT runtime dependencies of wxcc-mcp-server; they are used only by
+# the deck generator in lab-materials/scripts/.
+python-pptx==1.0.2
+PyYAML==6.0.2
