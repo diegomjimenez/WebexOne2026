@@ -1573,3 +1573,358 @@ Processing request of type ListToolsRequest
 Processing request of type ListPromptsRequest
 Processing request of type ListResourcesRequest
 Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type CallToolRequest
+Processing request of type PingRequest
+{"tool": "sync_crm_to_address_book", "address_book_id": "9ba275fa-7c63-4a47-afe2-426d2c503642", "prune": false, "dry_run": false, "event": "tool_invoked", "level": "info", "timestamp": "2026-07-22T16:12:57.246569Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "level": "info", "timestamp": "2026-07-22T16:12:57.246991Z"}
+{"method": "GET", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry", "attempt": 1, "event": "wxcc_api_call", "level": "info", "timestamp": "2026-07-22T16:12:57.247062Z"}
+HTTP Request: GET https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry?page=0&pageSize=100 "HTTP/1.1 405 Method Not Allowed"
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+{"tool": "create_entry", "dry_run": false, "event": "tool_invoked", "level": "info", "timestamp": "2026-07-22T16:13:43.191341Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "level": "info", "timestamp": "2026-07-22T16:13:43.191595Z"}
+{"method": "POST", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry", "attempt": 1, "event": "wxcc_api_call", "level": "info", "timestamp": "2026-07-22T16:13:43.191664Z"}
+HTTP Request: POST https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry "HTTP/1.1 400 Bad Request"
+{"tool": "create_entry", "dry_run": false, "event": "tool_invoked", "level": "info", "timestamp": "2026-07-22T16:13:44.244838Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "level": "info", "timestamp": "2026-07-22T16:13:44.245050Z"}
+{"method": "POST", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry", "attempt": 1, "event": "wxcc_api_call", "level": "info", "timestamp": "2026-07-22T16:13:44.245107Z"}
+HTTP Request: POST https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry "HTTP/1.1 400 Bad Request"
+{"tool": "create_entry", "dry_run": false, "event": "tool_invoked", "level": "info", "timestamp": "2026-07-22T16:13:45.544017Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "level": "info", "timestamp": "2026-07-22T16:13:45.544651Z"}
+{"method": "POST", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry", "attempt": 1, "event": "wxcc_api_call", "level": "info", "timestamp": "2026-07-22T16:13:45.544841Z"}
+HTTP Request: POST https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry "HTTP/1.1 400 Bad Request"
+{"tool": "create_entry", "dry_run": false, "event": "tool_invoked", "level": "info", "timestamp": "2026-07-22T16:13:46.987098Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "level": "info", "timestamp": "2026-07-22T16:13:46.989684Z"}
+{"method": "POST", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry", "attempt": 1, "event": "wxcc_api_call", "level": "info", "timestamp": "2026-07-22T16:13:46.989826Z"}
+HTTP Request: POST https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry "HTTP/1.1 400 Bad Request"
+{"tool": "create_entry", "dry_run": false, "event": "tool_invoked", "level": "info", "timestamp": "2026-07-22T16:13:48.371964Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "level": "info", "timestamp": "2026-07-22T16:13:48.372522Z"}
+{"method": "POST", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry", "attempt": 1, "event": "wxcc_api_call", "level": "info", "timestamp": "2026-07-22T16:13:48.372603Z"}
+HTTP Request: POST https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry "HTTP/1.1 400 Bad Request"
+{"tool": "create_entry", "dry_run": false, "event": "tool_invoked", "level": "info", "timestamp": "2026-07-22T16:13:49.673734Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "level": "info", "timestamp": "2026-07-22T16:13:49.674091Z"}
+{"method": "POST", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry", "attempt": 1, "event": "wxcc_api_call", "level": "info", "timestamp": "2026-07-22T16:13:49.674158Z"}
+HTTP Request: POST https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry "HTTP/1.1 400 Bad Request"
+{"tool": "create_entry", "dry_run": false, "event": "tool_invoked", "level": "info", "timestamp": "2026-07-22T16:13:51.193690Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "level": "info", "timestamp": "2026-07-22T16:13:51.193858Z"}
+{"method": "POST", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry", "attempt": 1, "event": "wxcc_api_call", "level": "info", "timestamp": "2026-07-22T16:13:51.193908Z"}
+HTTP Request: POST https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry "HTTP/1.1 400 Bad Request"
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+{"tool": "create_entry", "dry_run": true, "event": "tool_invoked", "level": "info", "timestamp": "2026-07-22T16:14:41.406074Z"}
+{"tool": "create_entry", "dry_run": true, "event": "tool_invoked", "level": "info", "timestamp": "2026-07-22T16:14:43.727834Z"}
+{"tool": "create_entry", "dry_run": true, "event": "tool_invoked", "level": "info", "timestamp": "2026-07-22T16:14:45.954236Z"}
+{"tool": "create_entry", "dry_run": false, "event": "tool_invoked", "level": "info", "timestamp": "2026-07-22T16:14:55.398380Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "level": "info", "timestamp": "2026-07-22T16:14:55.398541Z"}
+{"method": "POST", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry", "attempt": 1, "event": "wxcc_api_call", "level": "info", "timestamp": "2026-07-22T16:14:55.398592Z"}
+HTTP Request: POST https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry "HTTP/1.1 201 Created"
+{"tool": "create_entry", "dry_run": false, "event": "tool_invoked", "level": "info", "timestamp": "2026-07-22T16:14:56.215201Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "level": "info", "timestamp": "2026-07-22T16:14:56.215371Z"}
+{"method": "POST", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry", "attempt": 1, "event": "wxcc_api_call", "level": "info", "timestamp": "2026-07-22T16:14:56.215477Z"}
+HTTP Request: POST https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry "HTTP/1.1 201 Created"
+{"tool": "create_entry", "dry_run": false, "event": "tool_invoked", "level": "info", "timestamp": "2026-07-22T16:14:57.729914Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "level": "info", "timestamp": "2026-07-22T16:14:57.730064Z"}
+{"method": "POST", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry", "attempt": 1, "event": "wxcc_api_call", "level": "info", "timestamp": "2026-07-22T16:14:57.730111Z"}
+HTTP Request: POST https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry "HTTP/1.1 201 Created"
+{"tool": "create_entry", "dry_run": false, "event": "tool_invoked", "level": "info", "timestamp": "2026-07-22T16:15:00.344278Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "level": "info", "timestamp": "2026-07-22T16:15:00.344433Z"}
+{"method": "POST", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry", "attempt": 1, "event": "wxcc_api_call", "level": "info", "timestamp": "2026-07-22T16:15:00.344607Z"}
+HTTP Request: POST https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry "HTTP/1.1 201 Created"
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+Processing request of type CallToolRequest
+{"tool": "create_entry", "dry_run": false, "event": "tool_invoked", "level": "info", "timestamp": "2026-07-22T16:15:19.901356Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "level": "info", "timestamp": "2026-07-22T16:15:19.901755Z"}
+{"method": "POST", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry", "attempt": 1, "event": "wxcc_api_call", "level": "info", "timestamp": "2026-07-22T16:15:19.901936Z"}
+HTTP Request: POST https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry "HTTP/1.1 201 Created"
+{"tool": "create_entry", "dry_run": false, "event": "tool_invoked", "level": "info", "timestamp": "2026-07-22T16:15:21.232671Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "level": "info", "timestamp": "2026-07-22T16:15:21.232920Z"}
+{"method": "POST", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry", "attempt": 1, "event": "wxcc_api_call", "level": "info", "timestamp": "2026-07-22T16:15:21.232965Z"}
+HTTP Request: POST https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry "HTTP/1.1 201 Created"
+{"tool": "create_entry", "dry_run": false, "event": "tool_invoked", "level": "info", "timestamp": "2026-07-22T16:15:22.214056Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "level": "info", "timestamp": "2026-07-22T16:15:22.214225Z"}
+{"method": "POST", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry", "attempt": 1, "event": "wxcc_api_call", "level": "info", "timestamp": "2026-07-22T16:15:22.214273Z"}
+HTTP Request: POST https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry "HTTP/1.1 201 Created"
+Processing request of type CallToolRequest
+{"tool": "list_entries", "address_book_id": "9ba275fa-7c63-4a47-afe2-426d2c503642", "event": "tool_invoked", "level": "info", "timestamp": "2026-07-22T16:15:27.684879Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "level": "info", "timestamp": "2026-07-22T16:15:27.685165Z"}
+{"method": "GET", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry", "attempt": 1, "event": "wxcc_api_call", "level": "info", "timestamp": "2026-07-22T16:15:27.685255Z"}
+HTTP Request: GET https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642/entry?page=0&pageSize=100 "HTTP/1.1 405 Method Not Allowed"
+Processing request of type CallToolRequest
+{"tool": "get_address_book", "address_book_id": "9ba275fa-7c63-4a47-afe2-426d2c503642", "event": "tool_invoked", "level": "info", "timestamp": "2026-07-22T16:15:33.776333Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "level": "info", "timestamp": "2026-07-22T16:15:33.776600Z"}
+{"method": "GET", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642", "attempt": 1, "event": "wxcc_api_call", "level": "info", "timestamp": "2026-07-22T16:15:33.776737Z"}
+HTTP Request: GET https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book/9ba275fa-7c63-4a47-afe2-426d2c503642 "HTTP/1.1 200 OK"
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+{"transport": "stdio", "event": "wxcc_mcp_server_starting", "level": "info", "timestamp": "2026-07-24T08:18:29.906043Z"}
+Processing request of type ListResourcesRequest
+Processing request of type ListToolsRequest
+Processing request of type ListResourcesRequest
+Processing request of type ListPromptsRequest
+Processing request of type SubscribeRequest
+Processing request of type SubscribeRequest
+Processing request of type SubscribeRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type ListToolsRequest
+Processing request of type ListPromptsRequest
+Processing request of type ListResourcesRequest
+Processing request of type ListToolsRequest
+Processing request of type ListPromptsRequest
+Processing request of type ListResourcesRequest
+{"transport": "stdio", "event": "wxcc_mcp_server_starting", "level": "info", "timestamp": "2026-07-24T08:29:41.942904Z"}
+Processing request of type ListResourcesRequest
+Processing request of type ListToolsRequest
+Processing request of type ListResourcesRequest
+Processing request of type ListPromptsRequest
+Processing request of type SubscribeRequest
+Processing request of type SubscribeRequest
+Processing request of type SubscribeRequest
+{"transport": "stdio", "event": "wxcc_mcp_server_starting", "level": "info", "timestamp": "2026-07-24T08:31:57.387086Z"}
+Processing request of type ListPromptsRequest
+Processing request of type ListToolsRequest
+Processing request of type CallToolRequest
+{"tool": "map_profiles_to_agents", "org_id": "a1934c08-18c6-4e96-9862-831fe8994392", "event": "tool_invoked", "level": "info", "timestamp": "2026-07-24T08:33:11.370366Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "level": "info", "timestamp": "2026-07-24T08:33:11.770545Z"}
+{"method": "GET", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/agent-profile", "attempt": 1, "event": "wxcc_api_call", "level": "info", "timestamp": "2026-07-24T08:33:11.770678Z"}
+HTTP Request: GET https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/agent-profile?pageSize=100 "HTTP/1.1 200 OK"
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "level": "info", "timestamp": "2026-07-24T08:33:12.960571Z"}
+{"method": "GET", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/user", "attempt": 1, "event": "wxcc_api_call", "level": "info", "timestamp": "2026-07-24T08:33:12.960664Z"}
+HTTP Request: GET https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/user?pageSize=100 "HTTP/1.1 200 OK"
+Processing request of type CallToolRequest
+{"tool": "list_address_books", "org_id": "a1934c08-18c6-4e96-9862-831fe8994392", "event": "tool_invoked", "level": "info", "timestamp": "2026-07-24T08:33:36.422501Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "level": "info", "timestamp": "2026-07-24T08:33:36.422669Z"}
+{"method": "GET", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book", "attempt": 1, "event": "wxcc_api_call", "level": "info", "timestamp": "2026-07-24T08:33:36.422731Z"}
+HTTP Request: GET https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book?pageSize=100 "HTTP/1.1 200 OK"
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+{"transport": "stdio", "event": "wxcc_mcp_server_starting", "level": "info", "timestamp": "2026-07-24T12:26:38.153792Z"}
+Processing request of type ListResourcesRequest
+Processing request of type ListToolsRequest
+Processing request of type ListResourcesRequest
+Processing request of type ListPromptsRequest
+Processing request of type ListToolsRequest
+Processing request of type SubscribeRequest
+Processing request of type SubscribeRequest
+Processing request of type ListPromptsRequest
+Processing request of type SubscribeRequest
+Processing request of type ListResourcesRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+{"transport": "stdio", "event": "wxcc_mcp_server_starting", "level": "info", "timestamp": "2026-07-24T13:54:15.393439Z"}
+Processing request of type ListResourcesRequest
+Processing request of type ReadResourceRequest
+Processing request of type ReadResourceRequest
+Processing request of type ReadResourceRequest
+{"transport": "stdio", "event": "wxcc_mcp_server_starting", "level": "info", "timestamp": "2026-07-24T13:55:05.213075Z"}
+Processing request of type ListPromptsRequest
+Processing request of type GetPromptRequest
+Error getting prompt sync_crm_to_address_book
+Traceback (most recent call last):
+  File "C:\WorkRelated_LocalFiles\WebexOne\wxcc-mcp-server\.venv\Lib\site-packages\mcp\server\fastmcp\server.py", line 1075, in get_prompt
+    messages = await prompt.render(arguments, context=self.get_context())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\WorkRelated_LocalFiles\WebexOne\wxcc-mcp-server\.venv\Lib\site-packages\mcp\server\fastmcp\prompts\base.py", line 149, in render
+    raise ValueError(f"Missing required arguments: {missing}")
+ValueError: Missing required arguments: {'org_id'}
+Processing request of type ListToolsRequest
+Processing request of type ListToolsRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+{"transport": "stdio", "event": "wxcc_mcp_server_starting", "level": "info", "timestamp": "2026-07-24T14:11:12.930450Z"}
+{"transport": "stdio", "event": "wxcc_mcp_server_starting", "level": "info", "timestamp": "2026-07-24T14:11:13.278131Z"}
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type CallToolRequest
+{"tool": "list_address_books", "intent": "listing address books for org a1934c08-18c6-4e96-9862-831fe8994392", "event": "tool.received", "request_id": "85c921", "level": "info", "timestamp": "2026-07-24T14:23:22.021836Z"}
+{"tool": "list_address_books", "org_id": "a1934c08-18c6-4e96-9862-831fe8994392", "event": "tool_invoked", "request_id": "85c921", "level": "info", "timestamp": "2026-07-24T14:23:22.026000Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "request_id": "85c921", "tool": "list_address_books", "level": "info", "timestamp": "2026-07-24T14:23:22.386237Z"}
+{"method": "GET", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book", "attempt": 1, "event": "wxcc_api_call", "request_id": "85c921", "tool": "list_address_books", "level": "info", "timestamp": "2026-07-24T14:23:22.386379Z"}
+HTTP Request: GET https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book?pageSize=100 "HTTP/1.1 200 OK"
+{"tool": "list_address_books", "elapsed_ms": 1449.4, "event": "tool.result", "request_id": "85c921", "level": "info", "timestamp": "2026-07-24T14:23:23.470876Z"}
+{"transport": "stdio", "event": "wxcc_mcp_server_starting", "level": "info", "timestamp": "2026-07-24T14:23:53.554688Z"}
+{"transport": "stdio", "event": "wxcc_mcp_server_starting", "level": "info", "timestamp": "2026-07-24T14:23:54.440985Z"}
+Processing request of type CallToolRequest
+{"tool": "list_address_books", "intent": "listing address books for org a1934c08-18c6-4e96-9862-831fe8994392", "event": "tool.received", "request_id": "f5cec8", "level": "info", "timestamp": "2026-07-24T14:25:07.937656Z"}
+{"tool": "list_address_books", "org_id": "a1934c08-18c6-4e96-9862-831fe8994392", "event": "tool_invoked", "request_id": "f5cec8", "level": "info", "timestamp": "2026-07-24T14:25:07.937864Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "request_id": "f5cec8", "tool": "list_address_books", "level": "info", "timestamp": "2026-07-24T14:25:07.937956Z"}
+{"method": "GET", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book", "attempt": 1, "event": "wxcc_api_call", "request_id": "f5cec8", "tool": "list_address_books", "level": "info", "timestamp": "2026-07-24T14:25:07.937995Z"}
+HTTP Request: GET https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book?pageSize=100 "HTTP/1.1 200 OK"
+{"tool": "list_address_books", "elapsed_ms": 933.8, "event": "tool.result", "request_id": "f5cec8", "level": "info", "timestamp": "2026-07-24T14:25:08.871439Z"}
+Processing request of type ListToolsRequest
+Processing request of type ListToolsRequest
+Processing request of type ListToolsRequest
+Processing request of type ListToolsRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type CallToolRequest
+{"tool": "list_address_books", "intent": "listing address books for org a1934c08-18c6-4e96-9862-831fe8994392", "event": "tool.received", "request_id": "304117", "level": "info", "timestamp": "2026-07-24T14:53:16.116907Z"}
+{"tool": "list_address_books", "org_id": "a1934c08-18c6-4e96-9862-831fe8994392", "event": "tool_invoked", "request_id": "304117", "level": "info", "timestamp": "2026-07-24T14:53:16.117918Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "request_id": "304117", "tool": "list_address_books", "level": "info", "timestamp": "2026-07-24T14:53:16.670903Z"}
+{"method": "GET", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book", "attempt": 1, "event": "wxcc_api_call", "request_id": "304117", "tool": "list_address_books", "level": "info", "timestamp": "2026-07-24T14:53:16.671106Z"}
+HTTP Request: GET https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book?pageSize=100 "HTTP/1.1 200 OK"
+{"tool": "list_address_books", "elapsed_ms": 1523.0, "event": "tool.result", "request_id": "304117", "level": "info", "timestamp": "2026-07-24T14:53:17.639930Z"}
+Processing request of type ListToolsRequest
+Processing request of type ListPromptsRequest
+Processing request of type ListResourcesRequest
+Processing request of type ListToolsRequest
+Processing request of type ListPromptsRequest
+Processing request of type ListResourcesRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type ListToolsRequest
+Processing request of type ListPromptsRequest
+Processing request of type ListResourcesRequest
+Processing request of type ListToolsRequest
+Processing request of type ListPromptsRequest
+Processing request of type ListResourcesRequest
+{"transport": "stdio", "event": "wxcc_mcp_server_starting", "level": "debug", "timestamp": "2026-07-24T15:04:16.466017Z"}
+Processing request of type ListResourcesRequest
+Processing request of type ListToolsRequest
+Processing request of type ListResourcesRequest
+Processing request of type ListPromptsRequest
+Processing request of type SubscribeRequest
+Processing request of type SubscribeRequest
+Processing request of type SubscribeRequest
+Processing request of type ListToolsRequest
+Processing request of type ListPromptsRequest
+Processing request of type ListResourcesRequest
+Processing request of type ListToolsRequest
+Processing request of type ListPromptsRequest
+Processing request of type ListResourcesRequest
+Processing request of type CallToolRequest
+{"tool": "list_address_books", "intent": "listing address books for org a1934c08-18c6-4e96-9862-831fe8994392", "event": "tool.received", "request_id": "4db030", "level": "info", "timestamp": "2026-07-24T15:06:06.629710Z"}
+{"tool": "list_address_books", "org_id": "a1934c08-18c6-4e96-9862-831fe8994392", "event": "tool_invoked", "request_id": "4db030", "level": "info", "timestamp": "2026-07-24T15:06:06.630102Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "request_id": "4db030", "tool": "list_address_books", "level": "info", "timestamp": "2026-07-24T15:06:06.997217Z"}
+{"method": "GET", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book", "attempt": 1, "event": "wxcc_api_call", "request_id": "4db030", "tool": "list_address_books", "level": "info", "timestamp": "2026-07-24T15:06:06.997376Z"}
+HTTP Request: GET https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book?pageSize=100 "HTTP/1.1 200 OK"
+{"tool": "list_address_books", "elapsed_ms": 1517.1, "event": "tool.result", "request_id": "4db030", "level": "info", "timestamp": "2026-07-24T15:06:08.146722Z"}
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type CallToolRequest
+{"tool": "list_address_books", "intent": "listing address books for org a1934c08-18c6-4e96-9862-831fe8994392", "event": "tool.received", "request_id": "35be6e", "level": "info", "timestamp": "2026-07-24T16:39:02.253474Z"}
+{"tool": "list_address_books", "org_id": "a1934c08-18c6-4e96-9862-831fe8994392", "event": "tool_invoked", "request_id": "35be6e", "level": "info", "timestamp": "2026-07-24T16:39:02.254425Z"}
+{"session_id": "local-stdio-session", "event": "using_static_access_token", "request_id": "35be6e", "tool": "list_address_books", "level": "info", "timestamp": "2026-07-24T16:39:02.254899Z"}
+{"method": "GET", "family": "config", "path": "/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book", "attempt": 1, "event": "wxcc_api_call", "request_id": "35be6e", "tool": "list_address_books", "level": "info", "timestamp": "2026-07-24T16:39:02.255049Z"}
+HTTP Request: GET https://api.wxcc-us1.cisco.com/organization/a1934c08-18c6-4e96-9862-831fe8994392/address-book?pageSize=100 "HTTP/1.1 200 OK"
+{"tool": "list_address_books", "elapsed_ms": 983.3, "event": "tool.result", "request_id": "35be6e", "level": "info", "timestamp": "2026-07-24T16:39:03.236238Z"}
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+{"transport": "stdio", "event": "wxcc_mcp_server_starting", "level": "debug", "timestamp": "2026-07-26T12:47:16.211042Z"}
+Processing request of type ListResourcesRequest
+Processing request of type ListToolsRequest
+Processing request of type ListResourcesRequest
+Processing request of type ListPromptsRequest
+Processing request of type SubscribeRequest
+Processing request of type SubscribeRequest
+Processing request of type SubscribeRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest
+Processing request of type PingRequest

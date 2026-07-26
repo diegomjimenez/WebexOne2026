@@ -107,3 +107,28 @@ def configure_logging(level: str = "INFO", log_file: str = "") -> None:
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:
     """Return a bound structlog logger."""
     return structlog.get_logger(name)
+
+
+def bind_request_context(**values: Any) -> dict[str, Any]:
+    """Bind per-invocation values (e.g. ``request_id``, ``tool``) to the log context.
+
+    Because the structlog processor chain includes ``merge_contextvars``, every
+    log record emitted *anywhere* downstream during this invocation — in the API
+    client, the auth broker, and the tool implementations — is automatically
+    stamped with these values. This is what lets a single correlation id thread
+    through the entire server-side log stream without passing it explicitly.
+
+    Returns:
+        A mapping of key -> reset token, to be passed to
+        :func:`reset_request_context` in a ``finally`` block so ids never leak
+        between overlapping async invocations.
+    """
+    return structlog.contextvars.bind_contextvars(**values)
+
+
+def reset_request_context(tokens: dict[str, Any]) -> None:
+    """Reset context values previously bound with :func:`bind_request_context`."""
+    try:
+        structlog.contextvars.reset_contextvars(**tokens)
+    except Exception:  # noqa: BLE001 - context teardown must never break a tool
+        structlog.contextvars.clear_contextvars()

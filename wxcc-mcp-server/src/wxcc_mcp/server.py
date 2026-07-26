@@ -13,8 +13,16 @@ It demonstrates every core MCP primitive:
 * **Prompts** — templated flows that drive the sync and provisioning scenarios.
 * **Elicitation** — interactive approval before any write commits.
 * **Progress notifications** — per-entry updates during a sync.
-* **Client-facing logging** — ``ctx.info``/``warning``/``error`` streamed to the client.
 * **Sampling (optional)** — ask the client LLM to summarise a sync result.
+
+Observability is delivered entirely through **stderr-native structured logging**
+(structlog → stderr, and optionally a log file). Each tool invocation emits
+correlated ``tool.received`` / ``tool.result`` / ``tool.error`` events sharing a
+short ``request_id``. In-protocol client logging (``notifications/message``) is
+intentionally **not** used: it was deprecated by the Model Context Protocol in
+`SEP-2577 <https://modelcontextprotocol.io/seps/2577-deprecate-roots-sampling-and-logging>`_
+(2026-07-28), which directs new servers to log to stderr where the host captures
+it automatically.
 
 Tokens are brokered per session by :class:`OAuthBroker` and never exposed to the
 model. Tools translate typed API errors into plain-language messages. All API
@@ -27,12 +35,16 @@ import json
 from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP
-from pydantic import BaseModel, Field
 
-from .api.client import WxccApiClient
-from .auth.oauth import OAuthBroker
+from ._runtime import (
+    emit_progress,
+    get_client,
+    maybe_summarize,
+    run_tool,
+    session_id,
+    should_commit,
+)
 from .config import get_settings
-from .errors import WxccError
 from .logging_config import configure_logging, get_logger
 from .models.schemas import (
     AssignAddressBookInput,
@@ -58,151 +70,31 @@ from .models.schemas import (
 from .prompts import provision_outbound_dialing as provision_prompt
 from .prompts import sync_crm_to_address_book as sync_prompt
 from .resources import address_book_schema_guide, crm_contacts, write_safety_guide
+from .icon import SERVER_ICON
 from .tools import address_books, agents, desktop_profiles, entries, sync
-from .tools._common import translate_error
 
 logger = get_logger(__name__)
 
-mcp = FastMCP("wxcc-mcp-server")
-
-_broker: OAuthBroker | None = None
-_client: WxccApiClient | None = None
+mcp = FastMCP("wxcc-mcp-server", icons=[SERVER_ICON])
 
 
-def _get_client() -> WxccApiClient:
-    """Return the lazily-initialized broker-backed API client."""
-    global _broker, _client
-    if _broker is None:
-        _broker = OAuthBroker()
-    if _client is None:
-        _client = WxccApiClient(_broker)
-    return _client
-
-
-def _session_id(ctx: Context | None) -> str:
-    """Derive a per-session id from the MCP context.
-
-    Falls back to a stable local id for single-user stdio deployments. A remote
-    multi-user deployment MUST map each MCP session to a distinct broker session.
-    """
-    if ctx is not None:
-        for attr in ("client_id", "session_id"):
-            value = getattr(ctx, attr, None)
-            if value:
-                return str(value)
-        session = getattr(ctx, "session", None)
-        if session is not None and getattr(session, "session_id", None):
-            return str(session.session_id)
-    return "local-stdio-session"
-
-
-async def _run_tool(coro_factory: Any, ctx: Context | None) -> dict[str, Any]:
-    """Execute a tool coroutine, translating typed errors to plain language."""
-    try:
-        result = await coro_factory()
-        return result.model_dump(mode="json")
-    except WxccError as exc:
-        return {"error": translate_error(exc)}
-    except ValueError as exc:
-        # E.164 / schema validation failures surface as a safe, plain message.
-        return {"error": str(exc)}
-
-
-# ---------------------------------------------------------------------------
-# MCP primitive helpers (elicitation / progress / logging / sampling)
+# ===========================================================================
+# Anatomy of an MCP tool  (read this once — every tool below has this shape)
 #
-# Every helper is defensive: MCP clients differ in which primitives they
-# support, so unsupported calls degrade gracefully instead of crashing a tool.
-# ---------------------------------------------------------------------------
-
-
-class _ApproveWrite(BaseModel):
-    """Schema for the elicited write-confirmation response."""
-
-    approve: bool = Field(description="Approve and commit this write action?")
-
-
-async def _emit_log(ctx: Context | None, level: str, message: str) -> None:
-    """Stream a client-facing log message; no-op if unsupported."""
-    if ctx is None:
-        return
-    try:
-        fn = getattr(ctx, level, None)
-        if fn is not None:
-            await fn(message)
-    except Exception:  # noqa: BLE001 - logging must never break a tool
-        pass
-
-
-async def _emit_progress(
-    ctx: Context | None, progress: float, total: float, message: str | None = None
-) -> None:
-    """Send a progress notification; no-op if unsupported."""
-    if ctx is None:
-        return
-    try:
-        await ctx.report_progress(progress=progress, total=total, message=message)
-    except TypeError:
-        try:
-            await ctx.report_progress(progress, total)
-        except Exception:  # noqa: BLE001
-            pass
-    except Exception:  # noqa: BLE001
-        pass
-
-
-async def _should_commit(ctx: Context | None, summary: str, confirm_flag: bool) -> bool:
-    """Decide whether a write should commit.
-
-    Prefers interactive elicitation. If the client does not support elicitation
-    (or it errors), falls back to the explicit ``confirm`` argument so the tool
-    still works — and stays safe by defaulting to *not* committing.
-    """
-    if ctx is not None:
-        try:
-            result = await ctx.elicit(
-                message=f"Confirm write action: {summary}", schema=_ApproveWrite
-            )
-            action = getattr(result, "action", None)
-            if action == "accept":
-                data = getattr(result, "data", None)
-                return bool(getattr(data, "approve", False))
-            if action in ("decline", "cancel"):
-                return False
-        except Exception:  # noqa: BLE001 - fall back to the confirm flag
-            pass
-    return bool(confirm_flag)
-
-
-async def _maybe_summarize(ctx: Context | None, findings: dict[str, Any]) -> str | None:
-    """Optionally ask the client's LLM to summarise a sync result (sampling).
-
-    Fully guarded: returns ``None`` if sampling is unavailable or errors, in
-    which case callers use their own deterministic summary.
-    """
-    if ctx is None:
-        return None
-    try:
-        from mcp.types import SamplingMessage, TextContent
-
-        session = getattr(ctx, "session", None)
-        create_message = getattr(session, "create_message", None)
-        if create_message is None:
-            return None
-        prompt = (
-            "In one or two sentences, summarise this WxCC address book sync "
-            f"result for an administrator:\n{json.dumps(findings, indent=2)}"
-        )
-        result = await create_message(
-            messages=[SamplingMessage(role="user", content=TextContent(type="text", text=prompt))],
-            max_tokens=200,
-        )
-        content = getattr(result, "content", None)
-        text = getattr(content, "text", None)
-        return str(text) if text else None
-    except Exception:  # noqa: BLE001 - sampling is optional
-        return None
-
+# A tool is just an async function registered with @mcp.tool(). Each one makes
+# the same three moves:
+#
+#   1. resolve the per-session Webex client            → get_client()
+#   2. map the MCP arguments to a typed *Input and      → address_books.run_list(
+#      call the matching function in tools/                  client, sid, SomeInput(...))
+#   3. hand that call to run_tool(), which tags it with  → run_tool(lambda: ..., ctx,
+#      a request_id, times it, logs received/result/         tool_name=..., intent=...)
+#      error, and translates Webex errors to plain text.
+#
+# Why the `lambda:`? It DEFERS the call so run_tool() can start its timer and
+# bind the correlation id *before* the work runs, then await it. Read one tool
+# and you've read them all. The machinery lives in `_runtime.py` — read it second.
+# ===========================================================================
 
 # ---------------------------------------------------------------------------
 # Address book tools
@@ -214,13 +106,15 @@ async def tool_list_address_books(
     org_id: str, max_results: int = 100, ctx: Context = None
 ) -> dict[str, Any]:
     """List address books in a WxCC organization (read-only)."""
-    client = _get_client()
-    sid = _session_id(ctx)
-    return await _run_tool(
+    client = get_client()
+    sid = session_id(ctx)
+    return await run_tool(
         lambda: address_books.run_list(
             client, sid, ListAddressBooksInput(org_id=org_id, max_results=max_results)
         ),
         ctx,
+        tool_name="list_address_books",
+        intent=f"listing address books for org {org_id}",
     )
 
 
@@ -229,14 +123,25 @@ async def tool_get_address_book(
     org_id: str, address_book_id: str, ctx: Context = None
 ) -> dict[str, Any]:
     """Get a single address book by id (read-only)."""
-    client = _get_client()
-    sid = _session_id(ctx)
-    return await _run_tool(
+    client = get_client()
+    sid = session_id(ctx)
+    return await run_tool(
         lambda: address_books.run_get(
             client, sid, GetAddressBookInput(org_id=org_id, address_book_id=address_book_id)
         ),
         ctx,
+        tool_name="get_address_book",
+        intent=f"reading address book {address_book_id}",
     )
+
+
+# --- Anatomy of a *write* tool -------------------------------------------
+# Writes add one move before the three above: should_commit() asks the user to
+# approve (via MCP elicitation), falling back to the explicit `confirm` flag.
+# Without approval the underlying tools/ function returns a dry-run preview and
+# nothing hits Webex; only an approved call commits. Every write tool below
+# follows this same gate.
+# -------------------------------------------------------------------------
 
 
 @mcp.tool()
@@ -249,11 +154,10 @@ async def tool_create_address_book(
     ctx: Context = None,
 ) -> dict[str, Any]:
     """Create an address book (elicitation-gated)."""
-    client = _get_client()
-    sid = _session_id(ctx)
-    commit = await _should_commit(ctx, f"create address book {name}", confirm)
-    await _emit_log(ctx, "info", f"create_address_book name={name} commit={commit}")
-    return await _run_tool(
+    client = get_client()
+    sid = session_id(ctx)
+    commit = await should_commit(ctx, f"create address book {name}", confirm)
+    return await run_tool(
         lambda: address_books.run_create(
             client,
             sid,
@@ -266,6 +170,8 @@ async def tool_create_address_book(
             ),
         ),
         ctx,
+        tool_name="create_address_book",
+        intent=f"create address book '{name}' (commit={commit})",
     )
 
 
@@ -279,11 +185,10 @@ async def tool_update_address_book(
     ctx: Context = None,
 ) -> dict[str, Any]:
     """Update an address book (elicitation-gated)."""
-    client = _get_client()
-    sid = _session_id(ctx)
-    commit = await _should_commit(ctx, f"update address book {address_book_id}", confirm)
-    await _emit_log(ctx, "info", f"update_address_book id={address_book_id} commit={commit}")
-    return await _run_tool(
+    client = get_client()
+    sid = session_id(ctx)
+    commit = await should_commit(ctx, f"update address book {address_book_id}", confirm)
+    return await run_tool(
         lambda: address_books.run_update(
             client,
             sid,
@@ -296,6 +201,8 @@ async def tool_update_address_book(
             ),
         ),
         ctx,
+        tool_name="update_address_book",
+        intent=f"update address book {address_book_id} (commit={commit})",
     )
 
 
@@ -304,17 +211,18 @@ async def tool_delete_address_book(
     org_id: str, address_book_id: str, confirm: bool = False, ctx: Context = None
 ) -> dict[str, Any]:
     """Delete an address book and all its entries (elicitation-gated, HIGH risk)."""
-    client = _get_client()
-    sid = _session_id(ctx)
-    commit = await _should_commit(ctx, f"delete address book {address_book_id}", confirm)
-    await _emit_log(ctx, "warning", f"delete_address_book id={address_book_id} commit={commit}")
-    return await _run_tool(
+    client = get_client()
+    sid = session_id(ctx)
+    commit = await should_commit(ctx, f"delete address book {address_book_id}", confirm)
+    return await run_tool(
         lambda: address_books.run_delete(
             client,
             sid,
             DeleteAddressBookInput(org_id=org_id, address_book_id=address_book_id, confirm=commit),
         ),
         ctx,
+        tool_name="delete_address_book",
+        intent=f"delete address book {address_book_id} (commit={commit})",
     )
 
 
@@ -335,9 +243,9 @@ async def tool_list_entries(
     ctx: Context = None,
 ) -> dict[str, Any]:
     """List entries in an address book with optional search/filter/attributes (read-only)."""
-    client = _get_client()
-    sid = _session_id(ctx)
-    return await _run_tool(
+    client = get_client()
+    sid = session_id(ctx)
+    return await run_tool(
         lambda: entries.run_list(
             client,
             sid,
@@ -352,6 +260,8 @@ async def tool_list_entries(
             ),
         ),
         ctx,
+        tool_name="list_entries",
+        intent=f"listing entries in address book {address_book_id}",
     )
 
 
@@ -360,15 +270,17 @@ async def tool_get_entry(
     org_id: str, address_book_id: str, entry_id: str, ctx: Context = None
 ) -> dict[str, Any]:
     """Get a single address book entry by id (read-only)."""
-    client = _get_client()
-    sid = _session_id(ctx)
-    return await _run_tool(
+    client = get_client()
+    sid = session_id(ctx)
+    return await run_tool(
         lambda: entries.run_get(
             client,
             sid,
             GetEntryInput(org_id=org_id, address_book_id=address_book_id, entry_id=entry_id),
         ),
         ctx,
+        tool_name="get_entry",
+        intent=f"reading entry {entry_id}",
     )
 
 
@@ -383,11 +295,10 @@ async def tool_create_entry(
     ctx: Context = None,
 ) -> dict[str, Any]:
     """Create an address book entry with an E.164 number (elicitation-gated)."""
-    client = _get_client()
-    sid = _session_id(ctx)
-    commit = await _should_commit(ctx, f"create entry {name} ({number})", confirm)
-    await _emit_log(ctx, "info", f"create_entry name={name} commit={commit}")
-    return await _run_tool(
+    client = get_client()
+    sid = session_id(ctx)
+    commit = await should_commit(ctx, f"create entry {name} ({number})", confirm)
+    return await run_tool(
         lambda: entries.run_create(
             client,
             sid,
@@ -401,6 +312,8 @@ async def tool_create_entry(
             ),
         ),
         ctx,
+        tool_name="create_entry",
+        intent=f"create entry '{name}' ({number}) (commit={commit})",
     )
 
 
@@ -415,11 +328,10 @@ async def tool_update_entry(
     ctx: Context = None,
 ) -> dict[str, Any]:
     """Update an address book entry (elicitation-gated)."""
-    client = _get_client()
-    sid = _session_id(ctx)
-    commit = await _should_commit(ctx, f"update entry {entry_id}", confirm)
-    await _emit_log(ctx, "info", f"update_entry id={entry_id} commit={commit}")
-    return await _run_tool(
+    client = get_client()
+    sid = session_id(ctx)
+    commit = await should_commit(ctx, f"update entry {entry_id}", confirm)
+    return await run_tool(
         lambda: entries.run_update(
             client,
             sid,
@@ -433,6 +345,8 @@ async def tool_update_entry(
             ),
         ),
         ctx,
+        tool_name="update_entry",
+        intent=f"update entry {entry_id} (commit={commit})",
     )
 
 
@@ -441,11 +355,10 @@ async def tool_delete_entry(
     org_id: str, address_book_id: str, entry_id: str, confirm: bool = False, ctx: Context = None
 ) -> dict[str, Any]:
     """Delete an address book entry (elicitation-gated, HIGH risk)."""
-    client = _get_client()
-    sid = _session_id(ctx)
-    commit = await _should_commit(ctx, f"delete entry {entry_id}", confirm)
-    await _emit_log(ctx, "warning", f"delete_entry id={entry_id} commit={commit}")
-    return await _run_tool(
+    client = get_client()
+    sid = session_id(ctx)
+    commit = await should_commit(ctx, f"delete entry {entry_id}", confirm)
+    return await run_tool(
         lambda: entries.run_delete(
             client,
             sid,
@@ -454,6 +367,8 @@ async def tool_delete_entry(
             ),
         ),
         ctx,
+        tool_name="delete_entry",
+        intent=f"delete entry {entry_id} (commit={commit})",
     )
 
 
@@ -470,11 +385,10 @@ async def tool_bulk_save_entries(
     ``entries_payload`` is a list of ``{"name", "number", "crm_id"?}`` objects;
     each number must be valid E.164.
     """
-    client = _get_client()
-    sid = _session_id(ctx)
-    commit = await _should_commit(ctx, f"bulk save {len(entries_payload)} entries", confirm)
-    await _emit_log(ctx, "info", f"bulk_save_entries count={len(entries_payload)} commit={commit}")
-    return await _run_tool(
+    client = get_client()
+    sid = session_id(ctx)
+    commit = await should_commit(ctx, f"bulk save {len(entries_payload)} entries", confirm)
+    return await run_tool(
         lambda: entries.run_bulk_save(
             client,
             sid,
@@ -486,6 +400,8 @@ async def tool_bulk_save_entries(
             ),
         ),
         ctx,
+        tool_name="bulk_save_entries",
+        intent=f"bulk save {len(entries_payload)} entries (commit={commit})",
     )
 
 
@@ -499,13 +415,15 @@ async def tool_list_desktop_profiles(
     org_id: str, max_results: int = 100, ctx: Context = None
 ) -> dict[str, Any]:
     """List desktop profiles in a WxCC organization (read-only)."""
-    client = _get_client()
-    sid = _session_id(ctx)
-    return await _run_tool(
+    client = get_client()
+    sid = session_id(ctx)
+    return await run_tool(
         lambda: desktop_profiles.run_list(
             client, sid, ListDesktopProfilesInput(org_id=org_id, max_results=max_results)
         ),
         ctx,
+        tool_name="list_desktop_profiles",
+        intent=f"listing desktop profiles for org {org_id}",
     )
 
 
@@ -514,13 +432,15 @@ async def tool_get_desktop_profile(
     org_id: str, profile_id: str, ctx: Context = None
 ) -> dict[str, Any]:
     """Get a single desktop profile by id (read-only)."""
-    client = _get_client()
-    sid = _session_id(ctx)
-    return await _run_tool(
+    client = get_client()
+    sid = session_id(ctx)
+    return await run_tool(
         lambda: desktop_profiles.run_get(
             client, sid, GetDesktopProfileInput(org_id=org_id, profile_id=profile_id)
         ),
         ctx,
+        tool_name="get_desktop_profile",
+        intent=f"reading desktop profile {profile_id}",
     )
 
 
@@ -529,24 +449,28 @@ async def tool_list_agents(
     org_id: str, max_results: int = 100, ctx: Context = None
 ) -> dict[str, Any]:
     """List agents (users) with their desktop profile assignment (read-only)."""
-    client = _get_client()
-    sid = _session_id(ctx)
-    return await _run_tool(
+    client = get_client()
+    sid = session_id(ctx)
+    return await run_tool(
         lambda: agents.run_list(
             client, sid, ListAgentsInput(org_id=org_id, max_results=max_results)
         ),
         ctx,
+        tool_name="list_agents",
+        intent=f"listing agents for org {org_id}",
     )
 
 
 @mcp.tool()
 async def tool_get_agent(org_id: str, identifier: str, ctx: Context = None) -> dict[str, Any]:
     """Get a single agent (user) by id (read-only)."""
-    client = _get_client()
-    sid = _session_id(ctx)
-    return await _run_tool(
+    client = get_client()
+    sid = session_id(ctx)
+    return await run_tool(
         lambda: agents.run_get(client, sid, GetAgentInput(org_id=org_id, identifier=identifier)),
         ctx,
+        tool_name="get_agent",
+        intent=f"reading agent {identifier}",
     )
 
 
@@ -559,13 +483,15 @@ async def tool_map_profiles_to_agents(
     Shows which agents would gain access if an address book is assigned to a
     given profile.
     """
-    client = _get_client()
-    sid = _session_id(ctx)
-    return await _run_tool(
+    client = get_client()
+    sid = session_id(ctx)
+    return await run_tool(
         lambda: agents.run_map_profiles_to_agents(
             client, sid, ProfileAgentMapInput(org_id=org_id, max_results=max_results)
         ),
         ctx,
+        tool_name="map_profiles_to_agents",
+        intent=f"mapping profiles to agents for org {org_id}",
     )
 
 
@@ -578,17 +504,12 @@ async def tool_assign_address_book_to_profile(
     Changes only ``addressBookId``; all other (non-deprecated) profile fields are
     preserved.
     """
-    client = _get_client()
-    sid = _session_id(ctx)
-    commit = await _should_commit(
+    client = get_client()
+    sid = session_id(ctx)
+    commit = await should_commit(
         ctx, f"assign address book {address_book_id} to profile {profile_id}", confirm
     )
-    await _emit_log(
-        ctx,
-        "info",
-        f"assign_address_book profile={profile_id} book={address_book_id} commit={commit}",
-    )
-    return await _run_tool(
+    return await run_tool(
         lambda: desktop_profiles.run_assign_address_book(
             client,
             sid,
@@ -600,6 +521,8 @@ async def tool_assign_address_book_to_profile(
             ),
         ),
         ctx,
+        tool_name="assign_address_book_to_profile",
+        intent=f"assign book {address_book_id} to profile {profile_id} (commit={commit})",
     )
 
 
@@ -625,21 +548,22 @@ async def tool_sync_crm_to_address_book(
     from the CRM source) is OFF by default. When ``summarize`` is set and the
     client supports sampling, a natural-language summary is added.
     """
-    client = _get_client()
-    sid = _session_id(ctx)
+    client = get_client()
+    sid = session_id(ctx)
     summary = f"sync CRM into address book {address_book_id}"
     if prune:
         summary += " (with pruning — deletes entries absent from CRM)"
-    commit = await _should_commit(ctx, summary, confirm)
-    await _emit_log(ctx, "info", f"sync_crm_to_address_book book={address_book_id} commit={commit}")
+    commit = await should_commit(ctx, summary, confirm)
 
     async def _progress(done: float, total: float, message: str) -> None:
-        await _emit_progress(ctx, done, total, message)
+        await emit_progress(ctx, done, total, message)
 
-    async def _log(level: str, message: str) -> None:
-        await _emit_log(ctx, level, message)
+    async def _log(_level: str, message: str) -> None:
+        # Per-entry sync events go to the stderr-native structured stream; they
+        # inherit the invocation's request_id via contextvars (bound in run_tool).
+        logger.info("sync.entry", detail=message)
 
-    result = await _run_tool(
+    result = await run_tool(
         lambda: sync.run(
             client,
             sid,
@@ -654,9 +578,11 @@ async def tool_sync_crm_to_address_book(
             on_log=_log,
         ),
         ctx,
+        tool_name="sync_crm_to_address_book",
+        intent=f"sync CRM into address book {address_book_id} (commit={commit})",
     )
     if "error" not in result and summarize:
-        llm_summary = await _maybe_summarize(ctx, result)
+        llm_summary = await maybe_summarize(ctx, result)
         if llm_summary:
             result["llm_summary"] = llm_summary
     return result
@@ -710,7 +636,7 @@ def main() -> None:
     """Configure logging and run the server over stdio."""
     settings = get_settings()
     configure_logging(settings.log_level, log_file=settings.log_file)
-    logger.info("wxcc_mcp_server_starting", transport="stdio")
+    logger.debug("wxcc_mcp_server_starting", transport="stdio")
     mcp.run()
 
 
