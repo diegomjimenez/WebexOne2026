@@ -24,3 +24,6 @@ htmlcov/
 # Local token store (never commit brokered tokens)
 .tokens/
 *.token
+tests/
+assets/
+wxcc_debug.log
