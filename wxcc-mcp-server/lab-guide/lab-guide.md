@@ -139,6 +139,76 @@ Then point your MCP client at it. Example client configuration:
 
 Confirm the client lists the WxCC tools, resources, and prompts. You are ready to build.
 
+> **"I don't have raw MCP JSON-RPC access" — what does that mean?**
+>
+> If you ask the LLM inside your client to "run `prompts/list`" or "show me `resources/list`",
+> it will likely reply: *"I don't have raw protocol access."* This is correct and expected.
+> There are **two levels** of access inside every MCP client:
+>
+> ```text
+>   ┌───────────────────────────────────────────────────────────────────┐
+>   │  THE CLIENT (code)          THE LLM (model inside the client)    │
+>   │  ─────────────────          ────────────────────────────────     │
+>   │                                                                  │
+>   │  • Speaks JSON-RPC          • Only sees what the client          │
+>   │  • Calls tools/list,          chose to expose                    │
+>   │    prompts/list,            • Tools → callable functions ✓       │
+>   │    resources/list           • Prompts → maybe (client decides)   │
+>   │  • Negotiates capabilities  • Resources → maybe (client decides) │
+>   │  • This is CODE             • Has NO protocol access             │
+>   │                                                                  │
+>   └───────────────────────────────────────────────────────────────────┘
+> ```
+>
+> The **client software** talks to the MCP server using JSON-RPC — it calls `tools/list`,
+> `prompts/list`, and `resources/list` during connection setup. But the **LLM** never sees
+> those protocol messages. It only sees what the client decided to surface:
+>
+> | Primitive | Claude Desktop | Cursor | Custom bot |
+> |---|---|---|---|
+> | Tools | All shown, model-invokable | Progressive load (subset shown) | Translated to OpenAI functions |
+> | Prompts | `/` slash-command menu | Not surfaced to model | Not surfaced (unless wired) |
+> | Resources | Attachment menu (📎) | Not surfaced to model | Optionally injected at startup |
+>
+> So if your LLM says "I can't see prompts" — that is **not a server bug**. The server
+> registered them correctly. The client simply didn't wire that protocol method into anything
+> the model can reach. This is by design: tools are *model-controlled*, but prompts are
+> *user-controlled* and resources are *application-controlled* — each has a different actor
+> who triggers it.
+>
+> **To verify all primitives are registered**, use the
+> [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) — it shows tools,
+> prompts, and resources in separate tabs regardless of what any specific client surfaces.
+
+> **Known client limitations (as of mid-2026).** Even when the server correctly registers
+> prompts and resources, current MCP clients have documented gaps:
+>
+> | Issue | Client | Status | Reference |
+> |---|---|---|---|
+> | Model cannot call `prompts/list` or `resources/read` programmatically | Claude Desktop | Confirmed by Anthropic: *"not something we have plans to work on in the short term"* | [claude-ai-mcp#23](https://github.com/anthropics/claude-ai-mcp/issues/23) |
+> | Resources listed in Settings but LLM ignores them (does web search instead) | Claude Desktop | Open | [typescript-sdk#686](https://github.com/modelcontextprotocol/typescript-sdk/issues/686) |
+> | Dynamic resource templates (`greeting://{name}`) broken | Claude Desktop | Tracked as P0 | [layered.dev](https://layered.dev/mcp-resources-the-overlooked-primitive/) |
+> | Local stdio prompts fail to invoke (regression on Windows) | Claude Desktop 1.24012.x | Open | [claude-code#82045](https://github.com/anthropics/claude-code/issues/82045) |
+> | Prompt title/name parsing — spaces in title break slash commands | Claude Code | Fixed in later builds | [claude-code#10992](https://github.com/anthropics/claude-code/issues/10992) |
+> | Agents cannot discover or use prompts (no `ListMcpPromptsTool`) | Claude Code | Closed as "not planned" | [claude-code#37900](https://github.com/anthropics/claude-code/issues/37900) |
+> | Prompts and resources not surfaced to model at all | Cursor | By design (tools-only progressive loading) | — |
+>
+> **Practical workaround.** The community-adopted pattern is to wrap critical resources and
+> prompts as **tools** — the one primitive all clients reliably support. This trades the MCP
+> control-model separation for universal accessibility:
+>
+> ```python
+> @mcp.tool()
+> async def read_schema_guide() -> str:
+>     """Read the address book schema reference."""
+>     return json.dumps(address_book_schema_guide.as_dict(), indent=2)
+> ```
+>
+> This lab keeps prompts and resources as their proper types (they work in MCP Inspector and
+> teach the correct architecture), but be aware that not every client will surface them to
+> the model automatically. See the **Appendix — Client primitive support matrix** for the
+> full picture.
+
 ### Step 0.8: Open the troubleshooting cockpit — one stream, two views
 
 This lab is a **glass box**: every tool call narrates itself as structured JSON on the server's
@@ -263,8 +333,11 @@ for *how*.**
 
 ### Step 1.2: List existing address books
 
-From your MCP client, invoke `tool_list_address_books` with your `org_id`. A live org returns
-the books already present — this both proves connectivity and shows you the starting state:
+In your MCP client, type something like:
+
+> **You:** Show me what address books already exist in my org.
+
+The assistant calls `tool_list_address_books` behind the scenes, returning:
 
 ```json
 {
@@ -290,6 +363,16 @@ the books already present — this both proves connectivity and shows you the st
 > to *your* click. (Your id and timing will differ.)
 
 ### Step 1.3: Read the reference resources
+
+Explore what reference data the server provides:
+
+> **You:** What reference information do you have about address book rules and formatting?
+
+Depending on your client, the assistant may read the resources automatically (Claude Code) or
+you may need to attach them manually (Claude Desktop — see the client limitations callout in
+Step 0.7). In MCP Inspector, switch to the **Resources** tab to browse them directly.
+
+The server exposes two resources:
 
 - `src/wxcc_mcp/resources/crm_contacts.py` (`crm://contacts`) — the sample CRM export that
   serves as a **source of truth** for the sync demo.
@@ -319,8 +402,14 @@ returns a **dry-run preview**; only an approved call (or `confirm=True`) commits
 
 ### Step 2.2: Create "Internal Directory"
 
-Invoke `tool_create_address_book` with `parent_type = ORGANIZATION` so every site can use it.
-On approval you get the committed record and its new id:
+In your MCP client, ask:
+
+> **You:** Create a new organization-wide address book called "Internal Directory" for our
+> internal contact directory.
+
+The assistant builds the payload and — depending on your client — either shows a dry-run
+preview and asks for confirmation (elicitation), or commits directly if you've signalled
+approval. On approval you get the committed record and its new id:
 
 ```json
 {
@@ -369,8 +458,11 @@ rejected before the network (the typed contract), see **Chapter 10.5 (Under the 
 
 ### Step 3.1: First attempt — watch validation catch a bad number
 
-Try adding a contact with an unformatted number (e.g. `"05"` or `"4155550101"`). The server
-refuses with a typed validation error:
+Try adding a contact with a deliberately malformed number:
+
+> **You:** Add a contact called "Test" with phone number 05 to my Internal Directory address book.
+
+The assistant calls `tool_create_entry` — but the server refuses with a typed validation error:
 
 ```text
 Value error, Phone number '05' is not valid E.164 (e.g. +14155551234).
@@ -394,7 +486,16 @@ hits the API — and the assistant gets an actionable message instead of an opaq
 
 ### Step 3.2: Add the Day 1 baseline (3 contacts)
 
-The CRM currently has 3 contacts. Add them with valid E.164 numbers:
+Now add the three real contacts. You can do them one at a time or ask the assistant to add all
+three:
+
+> **You:** Add these contacts to my Internal Directory address book:
+> - Acme Corp - Reception, +14155550101
+> - Globex - Support Desk, +14155550103
+> - Initech - Sales, +14155550104
+
+The assistant will call `tool_create_entry` for each (approving each write). The CRM currently
+has 3 contacts — here they are with valid E.164 numbers:
 
 | Contact | Number | CRM id |
 |---------|--------|--------|
@@ -430,7 +531,21 @@ message you see here, see **Chapter 10.3 (Under the hood)**.
 ### Step 4.1: Find the agent and their profile
 
 Agents inherit their address book from the **desktop profile** assigned to them, so first find
-which profile `user2` uses.
+which profile `user2` uses. Ask:
+
+> **You:** List all agents in my org and show me which desktop profile each one is assigned to.
+
+The assistant calls `tool_list_agents` and responds:
+
+> **Assistant:** Here are the agents in your organization:
+>
+> | Agent | Email | Desktop Profile |
+> |-------|-------|-----------------|
+> | User 1 | user1@example.com | 89dea615-… (Agent-Profile) |
+> | User 2 | user2@example.com | 89dea615-… (Agent-Profile) |
+> | Admin  | admin@example.com | (none assigned) |
+>
+> Both user1 and user2 share the same desktop profile "Agent-Profile".
 
 > **Least-privilege note.** `tool_get_agent` may return *"Permission denied … does not have
 > rights to read this WxCC data"* if your token lacks the per-user read scope. That is expected
@@ -450,8 +565,19 @@ Here `user2` uses profile **`89dea615-…` ("Agent-Profile")**.
 
 ### Step 4.2: See who else shares the profile
 
-Call `tool_list_desktop_profiles` (or `tool_map_profiles_to_agents`). Note two things before you
-write:
+Ask for the profile details:
+
+> **You:** What address book is currently assigned to that Agent-Profile? And who else uses it?
+
+The assistant calls `tool_get_desktop_profile` (or `tool_map_profiles_to_agents`) and responds:
+
+> **Assistant:** Desktop Profile "Agent-Profile" (89dea615-…):
+> - Current address book: "AB" (87ac75ea-…)
+> - Assigned agents: user1, user2
+>
+> Note: changing the address book on this profile will affect **both** agents.
+
+Note two things before you write:
 
 - "Agent-Profile" currently points at the **"AB"** address book — assigning ours **replaces** it.
 - **`user1` shares the same profile**, so they will see the new contacts too.
@@ -461,8 +587,25 @@ affect several. Surface it, don't hide it.
 
 ### Step 4.3: Assign the address book and approve
 
-Call `tool_assign_address_book_to_profile(profile_id, address_book_id)`. The preview shows the
-current vs proposed `addressBookId`. **Approve** it. The committed profile reflects the change:
+Now make the change:
+
+> **You:** Assign my "Internal Directory" address book to the Agent-Profile so user2 can see
+> the contacts on their Agent Desktop.
+
+The assistant calls `tool_assign_address_book_to_profile` and (via elicitation or dry-run)
+asks for confirmation:
+
+> **Assistant:** I'll assign "Internal Directory" (9ba275fa-…) to Agent-Profile (89dea615-…).
+>
+> ⚠️ This will **replace** the current address book "AB" and affect 2 agents:
+> - user1@example.com
+> - user2@example.com
+>
+> Should I proceed?
+
+> **You:** Yes, go ahead.
+
+The committed profile reflects the change:
 
 ```json
 {
@@ -480,9 +623,15 @@ never touches the deprecated dial-plan fields.
 
 ### Step 4.4: Verify
 
-`tool_get_desktop_profile` confirms the new `addressBookId`. When `user2` next logs into the
-Agent Desktop, the Day 1 contacts appear in their address book — and, as noted, so will they
-for `user1`.
+Confirm it worked:
+
+> **You:** Show me the Agent-Profile now — confirm it points to the right address book.
+
+> **Assistant:** Verified. Agent-Profile (89dea615-…) now has addressBookId: 9ba275fa-…
+> ("Internal Directory"). The change is live.
+
+When `user2` next logs into the Agent Desktop, the Day 1 contacts appear in their address
+book — and, as noted, so will they for `user1`.
 
 > **Solution.** Safety is structural, not advisory: every write is gated by elicitation with a
 > `confirm=True` dry-run fallback, tokens are never returned to the model, the assignment
@@ -502,8 +651,13 @@ Reference: `src/wxcc_mcp/resources/crm_contacts.py` (`crm://contacts`).
 
 ### Step 5.1: Read the CRM resource
 
-In your MCP client, read the `crm://contacts` resource. It now shows **6 contacts** — not the
-3 you added on Day 1. What changed?
+Ask the assistant what the CRM currently holds:
+
+> **You:** What contacts does the CRM have right now? Show me the full list.
+
+The assistant reads the `crm://contacts` resource (or, if your client doesn't surface resources
+automatically, you can ask: *"Read the crm://contacts resource for me"*). It now shows
+**6 contacts** — not the 3 you added on Day 1. What changed?
 
 | Change | Contact | Detail |
 |--------|---------|--------|
@@ -547,9 +701,14 @@ Reference: `src/wxcc_mcp/tools/sync.py`, `crm://contacts`,
 
 ### Step 6.1: Preview the sync (dry-run)
 
-The instructor invokes `tool_sync_crm_to_address_book(org_id, address_book_id)` **without
-approval**. The tool reads `crm://contacts`, compares it to the current address book entries,
-and returns a dry-run preview:
+The instructor asks:
+
+> **Instructor:** Sync my CRM contacts into the Internal Directory address book — but show me
+> what would change first, don't commit yet.
+
+The assistant invokes `tool_sync_crm_to_address_book` without approval / as a dry-run. The
+tool reads `crm://contacts`, compares it to the current address book entries, and returns a
+preview:
 
 ```json
 {
@@ -574,6 +733,10 @@ present in the address book but **absent** from the CRM source are marked for de
 only when `prune=True`. Pruning is **off by default** as a safety measure.
 
 ### Step 6.3: Approve and apply
+
+The instructor approves:
+
+> **Instructor:** Looks good — go ahead and apply those changes.
 
 On approval the tool applies the plan, streaming **progress** per entry (an MCP
 `notifications/progress` update) and emitting a `sync.entry` event per change to the server log.
@@ -652,6 +815,58 @@ different kinds of output you see — so you can extend or debug the server with
 Reference: [MCP debugging guide](https://modelcontextprotocol.io/docs/tools/debugging),
 [SEP-2577 (deprecate logging)](https://modelcontextprotocol.io/seps/2577-deprecate-roots-sampling-and-logging),
 `src/wxcc_mcp/logging_config.py`, `src/wxcc_mcp/_runtime.py` (`run_tool`).
+
+### 8.0: Where does MCP logging live — client or server?
+
+If you are troubleshooting an MCP server for the first time, the natural question is: do I
+look at the **client** (Claude Desktop, Cursor, Inspector) or the **server** (your Python
+process)?
+
+The short answer: **the server produces all observability; the client just captures and
+displays it.** The server decides *what* to log, *how* to correlate it, and *what to redact*.
+The client's only job is to capture the server's stderr stream (because it spawned the server
+as a child process) and surface it in a UI — a log tab, a file, a panel.
+
+```text
+  ┌────────────────────────────────┐        ┌────────────────────────────────┐
+  │      MCP SERVER (yours)        │        │      MCP CLIENT (host)         │
+  │                                │        │                                │
+  │  Produces:                     │        │  Consumes:                     │
+  │  • Structured JSON on stderr   │─stderr─▶  • Displays in logs tab       │
+  │  • Correlation IDs             │        │  • Writes to mcp*.log          │
+  │  • Secret redaction            │        │  • (No filtering or transform) │
+  │  • Event lifecycle             │        │                                │
+  │  • Level filtering             │        │  Also sees:                    │
+  │                                │        │  • Protocol messages (JSON-RPC)│
+  │  Controls:                     │        │  • Tool results (content)      │
+  │  • What is logged              │        │  • Connection lifecycle         │
+  │  • What is redacted            │        │                                │
+  │  • The log level threshold     │        │                                │
+  └────────────────────────────────┘        └────────────────────────────────┘
+```
+
+| If you want to… | Look at… |
+|---|---|
+| Debug why a tool failed | Server logs (stderr or `WXCC_LOG_FILE`) |
+| Trace an API call end-to-end | Server logs (grep by `request_id`) |
+| See what the LLM received back | Client UI (conversation view) |
+| Verify the server started | Either (client shows stderr; server writes it) |
+| Monitor production health | Server side (structured JSON, alertable) |
+| Understand the protocol conversation | Client side (JSON-RPC request/response) |
+
+**Why not in-protocol?** MCP *used* to let servers push log events to the client through the
+protocol itself (`notifications/message`). That was deprecated in 2026 (§8.1 explains why).
+The modern model is simpler: **stderr IS the log**. The host captures it. End of story.
+
+This means your debugging workflow is always:
+
+1. **Set `WXCC_LOG_LEVEL=DEBUG`** (or `INFO` for less noise)
+2. **Optionally set `WXCC_LOG_FILE`** so you can grep a persistent file
+3. **Read the stderr stream** — either in your client's logs tab or by tailing the file
+4. **Grep by `request_id`** to correlate a single tool call across all stages
+
+The rest of this chapter explains *how* that stream is built (§8.2), *what* is redacted
+(§8.3), *how* correlation works (§8.4), and *where* the client surfaces it (§8.5).
 
 ### 8.1: MCP protocol logging — deprecated, and why this server doesn't use it
 
@@ -1230,6 +1445,87 @@ Build once. Use every Monday. The math does itself.
 
 ---
 
+## Appendix — Client primitive support matrix  *(reference)*
+
+MCP defines three core primitives (tools, resources, prompts), but client support varies
+significantly. This appendix documents the current state so you know what to expect from each
+client — and why MCP Inspector is the authoritative verification tool.
+
+### How each client surfaces the three primitives
+
+| Capability | Claude Desktop | Claude Code (agents) | Cursor | Custom bot (e.g. Webex) | MCP Inspector |
+|---|---|---|---|---|---|
+| `tools/list` → model can invoke | All tools shown | All tools shown | Progressive load (subset) | All as OpenAI functions | Full list + invoke |
+| `prompts/list` called at startup | Yes | Yes | Unknown | Yes (bridge method) | Yes |
+| Prompts visible to **user** | `/` slash commands | `/mcp__server__name` | No | No (unless wired) | Yes (Prompts tab) |
+| Prompts visible to **model** | **No** | **No** | **No** | **No** (unless wired) | N/A |
+| `resources/list` called at startup | Yes | Yes | Unknown | Yes (bridge method) | Yes |
+| Resources visible to **user** | Settings > PROVIDED RESOURCES | Via synthetic tools | No | No | Yes (Resources tab) |
+| Resources visible to **model** | **No** (user must manually attach) | **Yes** (`ListMcpResourcesTool`) | **No** | Partial (injected at startup) | N/A |
+| Elicitation support | Partial | Yes | Unknown | Via `ctx.elicit` | Yes |
+
+### Known issues with prompts (as of mid-2026)
+
+| Issue | Client | Impact | Workaround | Reference |
+|---|---|---|---|---|
+| Local stdio prompts fail to invoke | Claude Desktop (Windows 1.24012.x) | Prompts list but clicking them shows "Failed to get prompt" | Use remote server, or wrap as tool | [#82045](https://github.com/anthropics/claude-code/issues/82045) |
+| Title/name confusion — spaces break slash commands | Claude Code | `/server:Prompt Title` cut at first space → "Unknown slash command" | Set title = name (no spaces) | [#10992](https://github.com/anthropics/claude-code/issues/10992) |
+| Arguments after slash command break parsing | Claude Code | `/server:prompt arg` → "Unknown slash command" | Invoke without trailing text | [#6657](https://github.com/anthropics/claude-code/issues/6657) |
+| Agents cannot discover prompts | Claude Code | No `ListMcpPromptsTool` equivalent | Wrap prompts as tools | [#37900](https://github.com/anthropics/claude-code/issues/37900) |
+| `prompts/list` sent before `notifications/initialized` | Claude Code/Desktop | Timeout on slow servers | Ensure fast server startup | [#9011](https://github.com/anthropics/claude-code/issues/9011) |
+
+### Known issues with resources (as of mid-2026)
+
+| Issue | Client | Impact | Workaround | Reference |
+|---|---|---|---|---|
+| Model cannot call `resources/read` autonomously | Claude Desktop | User must manually attach via `+` button | Wrap as tool, or inject at startup | [#23](https://github.com/anthropics/claude-ai-mcp/issues/23) |
+| LLM ignores registered resources, does web search instead | Claude Desktop | Resources listed in settings but never read | Disable web search, or wrap as tool | [typescript-sdk#686](https://github.com/modelcontextprotocol/typescript-sdk/issues/686) |
+| Dynamic resource templates broken | Claude Desktop | `resources/templates/list` not called | Use static resources only | [layered.dev](https://layered.dev/mcp-resources-the-overlooked-primitive/) |
+| Large resources cause stack size errors | Claude Desktop | Resources over ~100KB fail silently | Paginate or summarize content | [layered.dev](https://layered.dev/mcp-resources-the-overlooked-primitive/) |
+
+### Why this server keeps prompts and resources as proper types
+
+Despite these client limitations, this lab registers prompts and resources as their spec-defined
+types (not wrapped as tools) because:
+
+1. **Correct architecture.** The MCP control model exists for a reason — resources are
+   application-controlled reference data, prompts are user-triggered workflow templates. Wrapping
+   everything as tools collapses these distinctions and loses the safety boundary (tools run with
+   model agency; resources do not).
+
+2. **MCP Inspector works.** The lab's verification tool shows all three primitives correctly.
+   Participants learn the real architecture, not a workaround.
+
+3. **Future-proof.** Client support is improving (Claude Code already added resource tools for
+   agents). Servers built correctly today will gain capabilities as clients catch up.
+
+4. **The custom bot bridges it.** The lab's Webex bot (`mcp_bridge.py`) has `list_prompts_sync`,
+   `get_prompt_sync`, `list_resources_sync`, and `read_resource_sync` — the wiring exists, it
+   just needs to be surfaced to the LLM or user depending on the use case.
+
+### The pragmatic workaround (when you need it)
+
+If you need resources or prompts to be model-accessible in production across all clients today,
+the community pattern is to expose them as tools:
+
+```python
+@mcp.tool()
+async def read_schema_guide() -> str:
+    """Read the address book schema reference (naming, E.164, parentType rules)."""
+    return json.dumps(address_book_schema_guide.as_dict(), indent=2)
+
+@mcp.tool()
+async def get_sync_workflow(org_id: str, address_book_id: str) -> str:
+    """Get the CRM sync workflow instructions for a given org and address book."""
+    return sync_prompt.build_prompt(org_id=org_id, book_name="", address_book_id=address_book_id)
+```
+
+This makes the content universally discoverable (every client supports `tools/list`), at the
+cost of losing the control-model separation. Use this pattern selectively — for content the
+model genuinely needs to access autonomously — and keep the proper types for everything else.
+
+---
+
 ## References
 
 - Model Context Protocol: <https://modelcontextprotocol.io>
@@ -1238,3 +1534,6 @@ Build once. Use every Monday. The math does itself.
 - MCP Inspector: <https://modelcontextprotocol.io/docs/tools/inspector>
 - Webex Contact Center for Developers: <https://developer.webex.com/docs/contact-center>
 - Server README and VERIFY/TODO checklist: `wxcc-mcp-server/README.md`
+- Client primitive support discussion: <https://github.com/anthropics/claude-ai-mcp/issues/23>
+- Resources as overlooked primitive: <https://layered.dev/mcp-resources-the-overlooked-primitive/>
+- Prompts and resources patterns: <https://dev.to/aws-heroes/mcp-prompts-and-resources-the-primitives-youre-not-using-3oo1>
