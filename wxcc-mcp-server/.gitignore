@@ -27,3 +27,4 @@ htmlcov/
 tests/
 assets/
 wxcc_debug.log
+readme.md

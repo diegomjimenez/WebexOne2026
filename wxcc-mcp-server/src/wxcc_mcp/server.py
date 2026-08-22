@@ -67,6 +67,7 @@ from .models.schemas import (
     UpdateAddressBookInput,
     UpdateEntryInput,
 )
+from .prompts import create_address_book as create_book_prompt
 from .prompts import provision_outbound_dialing as provision_prompt
 from .prompts import sync_crm_to_address_book as sync_prompt
 from .resources import address_book_schema_guide, crm_contacts, write_safety_guide
@@ -614,6 +615,12 @@ def resource_write_safety_guide() -> str:
 # ---------------------------------------------------------------------------
 # Prompts
 # ---------------------------------------------------------------------------
+
+
+@mcp.prompt(name=create_book_prompt.PROMPT_NAME, description=create_book_prompt.PROMPT_DESCRIPTION)
+def prompt_create_address_book(org_id: str, book_name: str = "") -> str:
+    """Render the create-address-book walkthrough prompt."""
+    return create_book_prompt.build_prompt(org_id=org_id, book_name=book_name)
 
 
 @mcp.prompt(name=sync_prompt.PROMPT_NAME, description=sync_prompt.PROMPT_DESCRIPTION)
