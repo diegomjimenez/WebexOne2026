@@ -834,6 +834,33 @@ only when `prune=True`. Pruning is **off by default** as a safety measure.
 
 ### Step 6.3: Approve and apply
 
+> **💡 What is Elicitation?**
+>
+> Before applying any change, the MCP server **asks you for permission** via a mechanism
+> called *elicitation*. Think of it as a consent dialog — the server cannot write anything
+> until you explicitly approve.
+>
+> ```
+> ┌─────────────── Your MCP Client (Codex, Claude Desktop, etc.) ───────────────┐
+> │                                                                              │
+> │  Server says: "Confirm write action: sync CRM → Internal Directory          │
+> │               (4 creates, 1 update, 1 delete)"                              │
+> │                                                                              │
+> │                     [Accept]          [Decline]                              │
+> │                                                                              │
+> └──────────────────────────────────────────────────────────────────────────────┘
+> ```
+>
+> - **Accept** → the server commits the changes.
+> - **Decline / Cancel** → the server returns a dry-run only; nothing is modified.
+> - **Client doesn't support elicitation** → the tool falls back to the explicit `confirm`
+>   parameter you passed (defaults to `False` = safe dry-run).
+>
+> This is a **human-in-the-loop safety gate** — one of MCP's design principles. The server
+> never mutates data silently. Different clients render this dialog differently: Claude Desktop
+> shows an inline approval card; Codex shows a popup; MCP Inspector shows a form. The
+> mechanism is the same — your click is the gate.
+
 The instructor approves:
 
 > **Instructor:** Looks good — go ahead and apply those changes.

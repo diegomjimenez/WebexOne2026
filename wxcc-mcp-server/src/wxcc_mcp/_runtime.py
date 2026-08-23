@@ -218,9 +218,14 @@ async def emit_progress(
 async def should_commit(ctx: Context | None, summary: str, confirm_flag: bool) -> bool:
     """Decide whether a write should commit.
 
-    Prefers interactive elicitation. If the client does not support elicitation
-    (or it errors), falls back to the explicit ``confirm`` argument so the tool
-    still works — and stays safe by defaulting to *not* committing.
+    Prefers interactive elicitation. The user clicking "Accept" in the
+    elicitation dialog is treated as sufficient approval — some clients
+    (e.g. Codex) do not populate the schema data fields, so requiring both
+    ``action=="accept"`` AND ``data.approve==True`` caused false negatives.
+
+    If the client does not support elicitation (or it errors), falls back to
+    the explicit ``confirm`` argument so the tool still works — and stays safe
+    by defaulting to *not* committing.
     """
     if ctx is not None:
         try:
@@ -229,8 +234,7 @@ async def should_commit(ctx: Context | None, summary: str, confirm_flag: bool) -
             )
             action = getattr(result, "action", None)
             if action == "accept":
-                data = getattr(result, "data", None)
-                return bool(getattr(data, "approve", False))
+                return True
             if action in ("decline", "cancel"):
                 return False
         except Exception:  # noqa: BLE001 - fall back to the confirm flag
