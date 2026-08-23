@@ -1,9 +1,8 @@
 """WxCC Address Book Entry API endpoints (Config family).
 
 Thin async wrappers for CRUD + bulk operations on an address book's entries.
-Path constants live in ``config.py`` and are marked ``# VERIFY``. The list
-endpoint supports ``search``, ``filter`` (RSQL), and ``attributes`` query
-parameters plus pagination.
+The list endpoint (v2) supports ``search``, ``filter`` (RSQL), and
+``attributes`` query parameters plus pagination. Create uses the v1 path.
 """
 
 from __future__ import annotations
@@ -28,7 +27,7 @@ async def list_entries(
     page_size: int = 100,
 ) -> Any:
     """List entries within an address book, with optional search/filter/attributes."""
-    path = config.ADDRESS_BOOK_ENTRIES_PATH.format(org_id=org_id, address_book_id=address_book_id)
+    path = config.ADDRESS_BOOK_ENTRIES_LIST_PATH.format(org_id=org_id, address_book_id=address_book_id)
     params: dict[str, Any] = {"page": page, "pageSize": min(page_size, 100)}
     if search:
         params["search"] = search
@@ -57,7 +56,7 @@ async def create_entry(
     payload: dict[str, Any],
 ) -> Any:
     """Create a new entry. Required body: name, number."""
-    path = config.ADDRESS_BOOK_ENTRIES_PATH.format(org_id=org_id, address_book_id=address_book_id)
+    path = config.ADDRESS_BOOK_ENTRIES_CREATE_PATH.format(org_id=org_id, address_book_id=address_book_id)
     return await client.post(ApiFamily.CONFIG, path, session_id, json_body=payload)
 
 

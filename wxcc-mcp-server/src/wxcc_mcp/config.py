@@ -163,18 +163,21 @@ class ApiFamily:
 # Paths are relative to the Config API base URL.
 # ---------------------------------------------------------------------------
 
-# --- Address Book (target v2; v1 is removed 2026-10-15) ----------------------
+# --- Address Book (v3 — current; v1 deprecated, removed 2026-10-15) ----------
 # Ref: https://developer.webex.com/webex-contact-center/docs/api/v1/address-book
-ADDRESS_BOOKS_PATH = "/organization/{org_id}/address-book"  # VERIFY (v2)
-ADDRESS_BOOK_BY_ID_PATH = "/organization/{org_id}/address-book/{address_book_id}"  # VERIFY (v2)
+# OpenAPI: https://raw.githubusercontent.com/api-evangelist/webex/refs/heads/main/openapi/webex-address-book-api-openapi.yml
+ADDRESS_BOOKS_PATH = "/organization/{org_id}/v3/address-book"
+ADDRESS_BOOK_BY_ID_PATH = "/organization/{org_id}/v3/address-book/{address_book_id}"
 
 # --- Address Book Entries ----------------------------------------------------
-# The entry sub-resource path shape (.../entry vs .../entries) is a VERIFY item.
-ADDRESS_BOOK_ENTRIES_PATH = "/organization/{org_id}/address-book/{address_book_id}/entry"  # VERIFY
+# v1 .../address-book/{id}/entry supports POST (create) and GET-by-id only.
+# v2 .../v2/address-book/{id}/entry adds GET (list with pagination/filter/search).
+# Use the v2 path for listing and the v1 path for creating.
+ADDRESS_BOOK_ENTRIES_LIST_PATH = "/organization/{org_id}/v2/address-book/{address_book_id}/entry"
+ADDRESS_BOOK_ENTRIES_CREATE_PATH = "/organization/{org_id}/address-book/{address_book_id}/entry"
 ADDRESS_BOOK_ENTRY_BY_ID_PATH = (
-    "/organization/{org_id}/address-book/{address_book_id}/entry/{entry_id}"  # VERIFY
+    "/organization/{org_id}/address-book/{address_book_id}/entry/{entry_id}"
 )
-# Bulk save entries — VERIFY the exact path and payload shape (upsert vs replace).
 ADDRESS_BOOK_ENTRIES_BULK_PATH = (
     "/organization/{org_id}/address-book/{address_book_id}/entry/bulk"  # VERIFY
 )
@@ -196,7 +199,8 @@ USER_BY_ID_PATH = "/organization/{org_id}/user/{user_id}"  # VERIFY
 ENDPOINT_FAMILY: dict[str, str] = {
     ADDRESS_BOOKS_PATH: ApiFamily.CONFIG,
     ADDRESS_BOOK_BY_ID_PATH: ApiFamily.CONFIG,
-    ADDRESS_BOOK_ENTRIES_PATH: ApiFamily.CONFIG,
+    ADDRESS_BOOK_ENTRIES_LIST_PATH: ApiFamily.CONFIG,
+    ADDRESS_BOOK_ENTRIES_CREATE_PATH: ApiFamily.CONFIG,
     ADDRESS_BOOK_ENTRY_BY_ID_PATH: ApiFamily.CONFIG,
     ADDRESS_BOOK_ENTRIES_BULK_PATH: ApiFamily.CONFIG,
     DESKTOP_PROFILES_PATH: ApiFamily.CONFIG,

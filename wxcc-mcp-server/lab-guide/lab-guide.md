@@ -209,6 +209,48 @@ Confirm the client lists the WxCC tools, resources, and prompts. You are ready t
 > the model automatically. See the **Appendix — Client primitive support matrix** for the
 > full picture.
 
+> **Why does MCP Inspector show resources but Claude Desktop doesn't?**
+>
+> If you verify your server with MCP Inspector and see `crm://contacts` listed and readable,
+> but Claude Desktop's model says *"I'd need a CRM connector"* — this is **expected behavior**,
+> not a bug. The reason is the MCP **control model**:
+>
+> | Primitive | Control actor | Who decides when to use it |
+> |-----------|--------------|---------------------------|
+> | Tools | **Model** | The AI decides to call a tool autonomously |
+> | Prompts | **User** | The human picks from a slash-command menu |
+> | Resources | **Application** | The client code decides what to inject into context |
+>
+> MCP Inspector works because **you** are the application — when you click "Read Resource",
+> you're playing the application role and calling `resources/read` yourself. There is no
+> model in the loop.
+>
+> Claude Desktop's position: since resources are *application-controlled*, the model should
+> not be able to pull arbitrary data into the conversation without the user's awareness.
+> They implemented this as a **manual attachment** (the `+` button) — putting you in control.
+> The model itself has no mechanism to call `resources/read`.
+>
+> Anthropic confirmed this in
+> [claude-ai-mcp#23](https://github.com/anthropics/claude-ai-mcp/issues/23):
+> *"not something we have plans to work on in the short term."* Their reasoning: allowing the
+> model to autonomously read resources would change the security model — the model could pull
+> data the user didn't intend to share in that conversation.
+>
+> **Contrast with Claude Code:** Claude Code *does* have `ListMcpResourcesTool` — it lets the
+> agent discover and read resources programmatically. The difference is trust assumptions:
+> Claude Code runs in a developer terminal where the user expects the model to access local
+> data. Claude Desktop is a consumer product with a broader threat model.
+>
+> **What this means for the lab:**
+>
+> - At Step 5.1, when you ask *"What contacts does the CRM have?"*, Claude Desktop's model
+>   does not know `crm://contacts` exists. It pattern-matches on "CRM" and hallucinates
+>   about connectors from its training data.
+> - **Fix:** manually attach the resource via `+` before asking, or ask explicitly:
+>   *"Read the crm://contacts resource for me."*
+> - The sync tool (`tool_sync_crm_to_address_book`) works fine because it reads the resource
+>   **server-side** in Python code — it never asks the model to fetch it.
+
 ### Step 0.8: Open the troubleshooting cockpit — one stream, two views
 
 This lab is a **glass box**: every tool call narrates itself as structured JSON on the server's
@@ -658,6 +700,64 @@ Ask the assistant what the CRM currently holds:
 The assistant reads the `crm://contacts` resource (or, if your client doesn't surface resources
 automatically, you can ask: *"Read the crm://contacts resource for me"*). It now shows
 **6 contacts** — not the 3 you added on Day 1. What changed?
+
+> **Troubleshooting — "I'd need a CRM connector (HubSpot, Zoho, etc.)"**
+>
+> If the assistant responds with something like *"I'd need one of the actual CRM connectors —
+> none are connected yet"* instead of showing contacts, the model is **not reaching the
+> `crm://contacts` resource**. This is a known Claude Desktop limitation (see Step 0.7), not
+> a server bug. The server registered the resource correctly; the client simply does not wire
+> `resources/read` into the model's callable surface.
+>
+> **Quick check — Claude Desktop Settings UI:**
+>
+> 1. Open **Settings → Developer** and click the **wxcc** server entry.
+> 2. Confirm `crm://contacts` appears under **PROVIDED RESOURCES**.
+> 3. If it is listed, the server is connected and working — the issue is client-side only.
+>
+> **Fix it — attach the resource manually:**
+>
+> In the Claude Desktop input area, click the **+** (attachment) button → select
+> `crm://contacts` from the resource list → then ask your question again. The model will now
+> see the resource content in context.
+>
+> **Definitive verification — MCP Inspector (no LLM involved):**
+>
+> MCP Inspector connects directly to your server over stdio and lets you browse tools,
+> resources, and prompts independently of any AI client.
+>
+> 1. Open a **new terminal** (keep your client running in the other one).
+>
+> 2. Launch Inspector:
+>
+>    ```powershell
+>    npx @modelcontextprotocol/inspector
+>    ```
+>
+> 3. Inspector opens a browser UI (typically `http://localhost:6274`). In the connection
+>    form set:
+>
+>    - **Transport:** `STDIO`
+>    - **Command:** the full path to your server executable, e.g.
+>      `C:\path\to\wxcc-mcp-server\.venv\Scripts\wxcc-mcp-server.exe`
+>      (or `python -m wxcc_mcp.server`)
+>    - **Arguments:** leave empty
+>    - **Environment Variables:** add any needed vars from your `.env`
+>      (`WXCC_ORG_ID`, `WXCC_ACCESS_TOKEN`, `WXCC_TOKEN_ENCRYPTION_KEY`)
+>
+> 4. Click **Connect**. The left sidebar should populate with three tabs:
+>    **Tools**, **Resources**, **Prompts**.
+>
+> 5. Switch to the **Resources** tab. You should see:
+>    - `crm://contacts`
+>    - `wxcc://reference/address-book-schema`
+>
+> 6. Click `crm://contacts` → **Read Resource**. Inspector displays the JSON payload
+>    with 6 contacts. This confirms the server is serving the resource correctly.
+>
+> If Inspector shows the resource but Claude Desktop does not surface it to the model,
+> the server is working as intended — use the manual-attach workaround above or continue
+> with Inspector for this step.
 
 | Change | Contact | Detail |
 |--------|---------|--------|
