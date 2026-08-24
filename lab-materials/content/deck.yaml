@@ -1,0 +1,212 @@
+# WebexOne 2026 lab deck — content source (OpenSpec tasks 3.1–3.4).
+#
+# Edit this file to change slide copy; then re-run the generator (see README).
+# The generator (scripts/build_deck.py) maps each slide's `layout` to a template
+# layout and fills placeholders. No colors/fonts live here — those come from the
+# template theme.
+#
+# layout values: title | contents | section | concept | statement | lab |
+#                metrics_clone | resources | thankyou
+#
+# NOTE: values marked "PLACEHOLDER" below need real event details before delivery
+# (session title/id, speakers, date, QR/lab short-URLs). See tasks.md 3.3.
+
+meta:
+  title: "The WxCC Agent Lifecycle, Powered by MCP"
+  subtitle: "Build an MCP server that lets an AI assistant onboard, diagnose, and offboard contact-center agents"
+  speaker1: "Speaker Name — Speaker Title, @social"   # PLACEHOLDER
+  speaker2: "Speaker Name — Speaker Title, @social"   # PLACEHOLDER
+  date: "Month 00, 2026"                               # PLACEHOLDER
+  session_id: null   # e.g. "BRKCOL-1234"; null keeps the template's BRKSEC-XXXX  # PLACEHOLDER
+
+slides:
+  # ---- Front matter ----
+  - layout: statement
+    title: "Join the conversation!"
+    subtitle: "Scan the QR code to join the Webex space for Q&A and lab support.  [QR PLACEHOLDER]"
+
+  - layout: title   # meta drives this slide
+
+  - layout: contents
+    title: "Contents"
+    numbers: ["01", "02", "03", "04", "05", "06", "07"]
+    items:
+      - "Why MCP + WxCC"
+      - "MCP primitives"
+      - "Setup & connect"
+      - "Build-live"
+      - "Diagnose"
+      - "Onboard / offboard + write-safety"
+      - "Going further"
+
+  # ================= 01 · Why MCP + WxCC =================
+  - layout: section
+    number: "01"
+    title: "Why MCP + WxCC"
+
+  - layout: concept
+    title: "The problem: config sprawl"
+    bullets:
+      - "WxCC admins juggle users, teams, queues, and skill profiles across multiple consoles."
+      - "\u201CWhy can't this agent go available?\u201D means manually cross-checking several config objects."
+      - "Onboarding and offboarding are repetitive, error-prone, multi-step chores."
+      - "An AI assistant could do this — if it could safely reach the WxCC APIs."
+    reference: "developer.webex.com/docs/contact-center"
+
+  - layout: concept
+    title: "What is MCP?"
+    bullets:
+      - "Model Context Protocol: an open standard connecting AI assistants to tools, data, and workflows."
+      - "A server exposes typed capabilities; any MCP-capable client can call them."
+      - "Primitives: tools, resources, prompts, elicitation, progress, logging, sampling."
+      - "We wrap the WxCC Admin/Config + Reporting/Search APIs behind one MCP server."
+    reference: "modelcontextprotocol.io"
+
+  - layout: statement
+    title: "One narrative: onboard \u2192 diagnose \u2192 offboard"
+    subtitle: "The whole lab follows a single agent's lifecycle, so every MCP primitive lands on one coherent story."
+
+  # ================= 02 · MCP primitives =================
+  - layout: section
+    number: "02"
+    title: "MCP primitives"
+
+  - layout: concept
+    title: "Seven primitives, one server"
+    bullets:
+      - "Tools — curated reads, a composite diagnostic, and gated writes."
+      - "Resources — reference docs the assistant can read for context."
+      - "Prompts — guided workflows (diagnose, onboard)."
+      - "Elicitation + Progress — approve writes; stream multi-step status."
+      - "Client logging + Sampling — narrate steps; optional AI-written summary."
+    reference: "modelcontextprotocol.io/docs/concepts"
+
+  - layout: metrics_clone   # cloned from template example slide 33 and retexted
+    replace:
+      "218%": "16"
+      "Y/Y Growth for Cloud Calling": "Tools"
+      "125%": "6"
+      "Y/Y Webex Suite Growth": "Resources"
+      "144%": "2"
+      "Y/Y Growth for Cloud Contact Center": "Prompts"
+      "387%": "7"
+      "Y/Y Cloud Connected Phone Growth": "MCP primitives"
+    title: "The curated surface"
+
+  # ================= 03 · Setup & connect =================
+  - layout: section
+    number: "03"
+    title: "Setup & connect"
+
+  - layout: concept
+    title: "What you'll run"
+    bullets:
+      - "Python 3.11+, a virtual environment, and `pip install -e \".[dev]\"`."
+      - "A per-session OAuth broker (tokens encrypted at rest, never logged)."
+      - "Config + Reporting API base URLs and scopes set in `.env`."
+      - "Endpoint paths ship as `# VERIFY` / `# TODO` placeholders — resolve before live use."
+    reference: "wxcc-mcp-server/README.md"
+
+  - layout: lab
+    mode: "Lab 1 · hands-on"
+    title: "Set up and connect"
+    steps:
+      - "Create + activate a venv; `pip install -e \".[dev]\"`."
+      - "Generate `WXCC_TOKEN_ENCRYPTION_KEY` and populate `.env`."
+      - "Start the server over stdio: `wxcc-mcp-server`."
+      - "Point an MCP-capable client at it and confirm the tools appear."
+
+  # ================= 04 · Build-live =================
+  - layout: section
+    number: "04"
+    title: "Build-live"
+
+  - layout: concept
+    title: "Anatomy: tool + resource + prompt"
+    bullets:
+      - "A tool = a typed function (Pydantic IO) the assistant can call — e.g. `get_user`."
+      - "A resource = read-only reference the assistant can pull in — e.g. `agent_state_reference`."
+      - "A prompt = a guided workflow with arguments — e.g. `diagnose_agent_cannot_go_available`."
+      - "Together they round-trip: prompt asks, tool fetches, resource explains."
+    reference: "src/wxcc_mcp/{tools,resources,prompts}/"
+
+  - layout: lab
+    mode: "Lab 1 · hands-on"
+    title: "Write your first primitives"
+    steps:
+      - "Implement the atomic read tool `tool_get_user` (tools/get_user.py)."
+      - "Register the `agent_state_reference` resource (resources/agent_state_reference.py)."
+      - "Wire the `diagnose_agent_cannot_go_available` prompt (prompts/)."
+      - "Call the prompt from your client and watch the tool + resource round-trip."
+
+  # ================= 05 · Diagnose =================
+  - layout: section
+    number: "05"
+    title: "Diagnose"
+
+  - layout: concept
+    title: "The hero tool: validate_agent_routing"
+    bullets:
+      - "A composite read tool that gathers user, team, queue, and skill-profile config."
+      - "Returns ranked, evidence-backed blocking issues — not raw dumps."
+      - "Answers \u201Cwhy can't this agent go available?\u201D in one call."
+      - "Demonstrates progress reporting and client logging along the way."
+    reference: "src/wxcc_mcp/tools/validate_agent_routing.py"
+
+  - layout: lab
+    mode: "Demo A · instructor-run"
+    title: "Run the diagnose flow"
+    steps:
+      - "Instructor runs the `diagnose_agent_cannot_go_available` prompt for a broken agent."
+      - "Watch `validate_agent_routing` collect evidence across config objects."
+      - "Read the ranked blocking issues and the suggested remediation."
+      - "Cross-reference the `troubleshooting-runbook` resource."
+
+  # ================= 06 · Onboard / offboard + write-safety =================
+  - layout: section
+    number: "06"
+    title: "Onboard / offboard + write-safety"
+
+  - layout: concept
+    title: "Every write is gated"
+    bullets:
+      - "When the client supports elicitation, the tool previews and asks the admin to approve."
+      - "When it doesn't, the tool falls back to a dry-run and commits only with `confirm=True`."
+      - "Nothing commits without explicit approval; tokens are never returned to the model."
+      - "The onboard flow reports progress across create \u2192 assign team \u2192 assign skill \u2192 verify."
+    reference: "wxcc://reference/write-safety-guide"
+
+  - layout: lab
+    mode: "Lab 2 · hands-on"
+    title: "Onboard an agent"
+    steps:
+      - "Run the `onboard_new_agent` prompt with an email + org."
+      - "Approve the previewed write when elicitation prompts you."
+      - "Watch progress stream across the create/assign/verify steps."
+      - "Re-run offboard via the gated `manage_users` deactivate path."
+
+  # ================= 07 · Going further =================
+  - layout: section
+    number: "07"
+    title: "Going further"
+
+  - layout: concept
+    title: "Beyond the lab"
+    bullets:
+      - "Sampling: let the server ask the client's model to summarize a diagnosis (capability-gated)."
+      - "Debugging: set `WXCC_LOG_FILE` for structured JSON logs with secrets redacted."
+      - "Go live: resolve every `# VERIFY` / `# TODO` against developer.webex.com."
+      - "Extend the narrative: new tools slot into the same gated, typed, logged pattern."
+    reference: "developer.webex.com"
+
+  - layout: resources
+    title: "Resources & links"
+    bullets:
+      - "MCP: modelcontextprotocol.io"
+      - "WxCC APIs: developer.webex.com/docs/contact-center"
+      - "This lab's code + guide: wxcc-mcp-server/ and lab-materials/"
+      - "Write-safety policy: wxcc://reference/write-safety-guide"
+
+  - layout: thankyou
+    title: "Thank you"
+    subtitle: "Share your experience — scan the QR for the post-session survey.  [QR PLACEHOLDER]"

@@ -22,11 +22,19 @@ def extract_items(raw: Any, *keys: str) -> list[dict[str, Any]]:
 
 
 def dry_run_response(preview: dict[str, Any]) -> dict[str, Any]:
+    """Build the shared "did not commit" result.
+
+    The message is deliberately neutral. Advice on how to proceed depends on
+    *why* the write was blocked — telling a caller to pass ``confirm`` is correct
+    when nobody could be asked and an invitation to retry past a human when
+    somebody refused — so it is supplied centrally from the gate's decision
+    rather than hardcoded here.
+    """
     return {
         "dry_run": True,
         "committed": False,
         "preview": preview,
-        "message": "Set confirm=True to commit this change.",
+        "message": "Not committed.",
     }
 
 

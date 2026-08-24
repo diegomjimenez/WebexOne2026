@@ -155,7 +155,11 @@ async def run(
     if not inp.confirm:
         output.dry_run = True
         output.committed = False
-        output.message = deterministic_summary(output)
+        # The plan goes in its own field rather than over ``message``: the shared
+        # explanation of *why* nothing was applied is supplied from the write
+        # gate, and overwriting it here is what once left sync as the only write
+        # tool that offered no way forward.
+        output.plan_summary = deterministic_summary(output)
         return output
 
     changes = [a for a in actions if a.action in ("create", "update", "delete")]
@@ -184,5 +188,6 @@ async def run(
 
     output.dry_run = False
     output.committed = True
-    output.message = deterministic_summary(output)
+    output.plan_summary = deterministic_summary(output)
+    output.message = output.plan_summary
     return output

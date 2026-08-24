@@ -58,7 +58,12 @@ class WriteInput(OrgScopedInput):
 
 
 class WriteOutput(BaseModel):
-    """Result of a write tool: either a dry-run preview or a committed change."""
+    """Result of a write tool: either a dry-run preview or a committed change.
+
+    The ``gate_*`` fields explain a write that did not commit. They are populated
+    centrally from the write gate's decision, so a caller never has to read the
+    server's log to find out why it previewed.
+    """
 
     committed: bool = False
     dry_run: bool = True
@@ -66,6 +71,22 @@ class WriteOutput(BaseModel):
     message: str | None = None
     preview: dict | None = None
     result: dict | None = None
+    gate_outcome: str | None = Field(
+        default=None,
+        description="How the write gate resolved: accepted, declined, cancelled, "
+        "unsupported, or error.",
+    )
+    gate_reason: str | None = Field(
+        default=None, description="Plain-language explanation of why the write did not commit."
+    )
+    next_step: str | None = Field(
+        default=None,
+        description="What to do next, present only when no approval could be requested.",
+    )
+    committed_without_approval: bool | None = Field(
+        default=None,
+        description="True when the change was applied without a user approving it interactively.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -388,3 +409,12 @@ class SyncOutput(BaseModel):
     actions: list[SyncAction] = Field(default_factory=list)
     message: str | None = None
     llm_summary: str | None = None
+    plan_summary: str | None = Field(
+        default=None,
+        description="Deterministic description of the planned or applied change. Accompanies "
+        "the shared explanation rather than replacing it.",
+    )
+    gate_outcome: str | None = None
+    gate_reason: str | None = None
+    next_step: str | None = None
+    committed_without_approval: bool | None = None

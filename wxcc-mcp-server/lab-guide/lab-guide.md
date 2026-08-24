@@ -362,8 +362,10 @@ async def tool_list_address_books(org_id: str, max_results: int = 100, ctx: Cont
 
 The `lambda:` matters: it *defers* the Webex call so `run_tool()` can start its timer and bind
 the `request_id` **before** the work runs, then `await` it. Writes add exactly one more move —
-`should_commit(ctx, summary, confirm)` — which asks the user to approve via elicitation (and
-falls back to the explicit `confirm` flag). This is why `server.py` reads as a flat catalogue
+`evaluate_write_gate(ctx, summary, confirm)` — which asks the user to approve via elicitation, and
+only falls back to the explicit `confirm` flag when no one could be asked. It returns a *decision*
+rather than a yes/no, so the tool can also tell the caller why a write previewed instead of
+applying. This is why `server.py` reads as a flat catalogue
 of tools and `_runtime.py` holds the plumbing: **read `server.py` for *what*, `_runtime.py`
 for *how*.**
 
@@ -449,9 +451,9 @@ In your MCP client, ask:
 > **You:** Create a new organization-wide address book called "Internal Directory" for our
 > internal contact directory.
 
-The assistant builds the payload and — depending on your client — either shows a dry-run
-preview and asks for confirmation (elicitation), or commits directly if you've signalled
-approval. On approval you get the committed record and its new id:
+The assistant builds the payload and the server asks you to approve it (elicitation). Clients
+that cannot show that prompt fall back to the explicit `confirm` flag and return a dry-run
+preview instead. On approval you get the committed record and its new id:
 
 ```json
 {
@@ -769,6 +771,15 @@ automatically, you can ask: *"Read the crm://contacts resource for me"*). It now
 | **NEW** | Hooli - Partner Line | new vendor |
 | **REMOVED** | Globex - Support Desk | left the partner program (absent from CRM) |
 
+> **How do CRM contacts know which address book to sync into?**
+>
+> They don't — and that is by design. The `crm://contacts` resource is a flat list of contacts
+> (id, name, number) with no address-book assignment, just like a real CRM export. The binding
+> happens when you invoke `sync_crm_to_address_book` and pass the `address_book_id` parameter.
+> The tool reads the global CRM list, reads the specified address book's current entries, and
+> diffs them. The *caller* (you, via the model) decides the target — the CRM data itself has
+> no opinion about where it lands.
+
 ### Step 5.2: Count the manual work
 
 To bring the address book in line with the CRM, you would need to:
@@ -827,10 +838,20 @@ in milliseconds.
 
 ### Step 6.2: Understand the diff logic
 
-`sync.compute_diff` is a pure function. It matches CRM contacts to existing entries **by CRM
-id first, then by normalized E.164 number**, classifying each as create / update / skip. Entries
-present in the address book but **absent** from the CRM source are marked for deletion — but
-only when `prune=True`. Pruning is **off by default** as a safety measure.
+`sync.compute_diff` is a **pure function** — no I/O, no side effects. It takes the CRM
+contacts and the existing address book entries and classifies each into one of four actions:
+
+| CRM contact vs. existing entry | Action |
+|---|---|
+| No match found | **create** — new entry needed |
+| Match found, name or number differs | **update** — field changed |
+| Match found, identical | **skip** — already in sync |
+| Entry exists but absent from CRM | **delete** (only if `prune=True`) |
+
+Matching uses two tiers: **CRM id first**, then **normalized E.164 number**. The two-tier
+strategy handles entries originally added manually (no CRM id) that still match on phone
+number. Pruning — deleting entries absent from the CRM — is **off by default** because
+removing contacts is higher risk than adding them; you must pass `prune=True` explicitly.
 
 ### Step 6.3: Approve and apply
 
@@ -851,15 +872,64 @@ only when `prune=True`. Pruning is **off by default** as a safety measure.
 > └──────────────────────────────────────────────────────────────────────────────┘
 > ```
 >
-> - **Accept** → the server commits the changes.
-> - **Decline / Cancel** → the server returns a dry-run only; nothing is modified.
-> - **Client doesn't support elicitation** → the tool falls back to the explicit `confirm`
->   parameter you passed (defaults to `False` = safe dry-run).
+> - **Accept** → the server commits the changes. Clicking Accept *is* the approval; there is
+>   no checkbox to tick and no field to fill in. The server reads only which button you
+>   pressed, never what the form contained.
+> - **Decline / Cancel** → the server returns a dry-run only; nothing is modified. A refusal
+>   is final — it cannot be overridden by any tool argument.
+> - **Client can't show the dialog** → the tool falls back to the explicit `confirm`
+>   parameter, which defaults to `False` (a safe dry-run).
+>
+> **You don't need to ask the assistant to pass `confirm=True`.** The server requests your
+> approval on every write, so simply calling the tool triggers the prompt. `confirm` exists
+> only for clients that cannot prompt at all — scripts and tests. This matters because
+> assistants often play it safe and pass `confirm=False`; that must not be able to cancel a
+> write you approved, and it can't.
 >
 > This is a **human-in-the-loop safety gate** — one of MCP's design principles. The server
 > never mutates data silently. Different clients render this dialog differently: Claude Desktop
 > shows an inline approval card; Codex shows a popup; MCP Inspector shows a form. The
 > mechanism is the same — your click is the gate.
+>
+> **Where the trust boundary sits.** *Requesting* consent is the server's job; *showing* the
+> request is the client's. The protocol cannot force a client to display anything, so a
+> client could in principle answer on your behalf without ever drawing a dialog. That is why
+> the next section matters: don't infer what happened from whether a popup appeared — read
+> the server's own record of the decision.
+
+> **🔍 Read the decision, don't guess it.** Every write emits one `write_gate` line recording
+> how the gate resolved, so you never have to infer consent from whether anything changed:
+>
+> ```text
+> {"event":"write_gate","outcome":"accepted","action":"sync CRM into address book 9ba275fa-…","committed":true,"elicit_ms":4820.5,"client":"Cursor 1.7","request_id":"f0a3c9"}
+> ```
+>
+> `outcome` is most of the story, and the five values are deliberately distinct:
+>
+> | `outcome` | What it means | `committed` |
+> |---|---|---|
+> | `accepted` | You approved the prompt | `true` |
+> | `declined` | You refused it | `false` |
+> | `cancelled` | **Ambiguous** — you dismissed it, *or* the client gave up on its own | `false` |
+> | `unsupported` | The client never offered elicitation, so it fell back to `confirm` | value of `confirm` |
+> | `error` | The prompt failed; `reason` says why, and it fell back to `confirm` | value of `confirm` |
+>
+> The distinction between `declined` and `unsupported`/`error` is the point. All three can
+> produce a dry-run, but only the first one means *you* said no.
+>
+> `cancelled` is the one value you cannot read on its own. The specification defines it as
+> "dismissed without choosing", but clients also emit it to report their *own* timeouts and
+> internal faults. Three companion fields settle it:
+>
+> - **`elicit_ms`** — how long the client took. Seconds means a human was deciding; a few
+>   milliseconds means the client answered by itself.
+> - **`client_detail`** — the reason the client attached, when it attached one. A
+>   `"Timeout: elicitation cancelled"` here is the client confessing, not you refusing.
+> - **`client`** — which client and build answered, so a report from one attendee's setup
+>   stays distinguishable from everyone else's.
+>
+> Only refusals carry `client_detail`. An approval's response body can contain text you typed,
+> so it is never logged.
 
 The instructor approves:
 
@@ -882,6 +952,7 @@ unavailable.
 > `f0a3c9` from contextvars:
 >
 > ```text
+> {"event":"write_gate","outcome":"accepted","committed":true,"request_id":"f0a3c9"}  ← your click
 > {"event":"tool.received","tool":"sync_crm_to_address_book","intent":"sync CRM into address book 9ba275fa-… (commit=True)","request_id":"f0a3c9"}
 > {"event":"wxcc_api_call","method":"GET","path":"…/entry","request_id":"f0a3c9"}
 > {"event":"wxcc_api_call","method":"POST","path":"…/entry","request_id":"f0a3c9"}  ← ×4 creates
@@ -1107,7 +1178,7 @@ Every tool invocation gets a unique **correlation id** — 6 hex characters gene
 `src/wxcc_mcp/_runtime.py`):
 
 ```python
-request_id = _new_request_id()                              # 1. generate "a1b2c3"
+request_id = request_id or new_request_id()                 # 1. generate "a1b2c3"
 tokens = bind_request_context(request_id=request_id, tool=tool_name)  # 2. bind to contextvars
 logger.info("tool.received", tool=tool_name, intent=intent) # 3. structured stderr event
 try:
@@ -1121,6 +1192,10 @@ finally:
 
 Notice there is **no** client-facing emit — every stage is a plain `logger.*` call to the
 stderr-native stream. That is the SEP-2577 pattern in practice.
+
+The `request_id or …` in step 1 is what lets a **write** tool mint the id *before* its approval
+gate runs and pass the same one to both, so the `write_gate` line and the tool's lifecycle share
+a trace (§8.7).
 
 Step 2 is the key: `bind_request_context` stores the `request_id` in a Python
 [`contextvar`](https://docs.python.org/3/library/contextvars.html). Because
@@ -1278,6 +1353,53 @@ Each scenario is the same drill: pick the `request_id` for your call, scan for i
 | C | **Permission denied (403)** | `tool.error` (`Permission denied … ask an administrator`) | `tool.received` → `wxcc_api_call` → `tool.error` | `wxcc_api_call` **present** — request left the server, WxCC refused |
 | D | **E.164 validation** | `tool.error` (`… not valid E.164`) | `tool.received` → `tool.error` | **no** `wxcc_api_call` — typed contract rejected it |
 | E | **Rate limited (429)** | `tool.result` after a pause (or `tool.error` if exhausted) | `wxcc_api_call` → `wxcc_api_retry` → `wxcc_api_call` | `wxcc_api_retry` line(s) present |
+| F | **"I approved but nothing changed"** | `tool.result` (`summary: dry-run preview (not committed)`) | `write_gate` → `tool.received` → `tool.result` | read `write_gate.outcome` — see below |
+
+### Scenario F: approved, but it came back a dry-run
+
+A dry-run after you clicked Accept has several very different causes, and the `write_gate`
+line names which one. Find it by `request_id`, then read `outcome`:
+
+| `outcome` | Diagnosis | What to do |
+|---|---|---|
+| `declined` | The server received an explicit refusal | You answered no — re-run and accept |
+| `cancelled` | **Ambiguous.** Read `elicit_ms` and `client_detail` first | See below |
+| `unsupported` | The client never negotiated elicitation, so nothing was ever asked. It fell back to `confirm`, which defaulted to `False` | Use a client that supports elicitation, or pass `confirm=True` deliberately |
+| `error` | The prompt was attempted and failed; `reason` carries the exception | Read `reason` — a transport or client-side fault, not a permissions problem |
+| `accepted` with `committed: true` | Consent was fine; the dry-run came from somewhere else | Look past the gate — check `tool.received`'s `intent` and the API stages |
+
+**Splitting a `cancelled`.** The action alone cannot tell a dismissal from a client that gave
+up, so use the two companion fields:
+
+```text
+{"event":"write_gate","outcome":"cancelled","elicit_ms":3.1,"client_detail":"Timeout: elicitation cancelled","client":"some-client 1.4"}
+```
+
+`elicit_ms` of `3.1` is nobody's decision — that is the client answering on its own, and
+`client_detail` says so outright. A dismissal you actually performed looks like `elicit_ms`
+in the thousands with no `client_detail`. If the fields point at the client, the fault is in
+its elicitation handling, not in the server or your permissions; note the `client` value and
+report it upstream.
+
+A quiet variant is worth knowing because a lab machine may hit it. If you saw **no dialog at
+all** and the event carries a low `elicit_ms` with *no* `client_detail`, the client declared
+elicitation support during the handshake and then cancelled the request itself — it never
+asked you. That is indistinguishable from a real dismissal from the protocol's point of view,
+which is why the tool's response says the prompt may not have appeared rather than offering
+you a way to retry. Codex `codex-mcp-client 0.149.0-alpha.4.1` is the known build with this
+behaviour, observed cancelling in as little as 3ms. There is no server-side workaround; use a
+client that completes the elicitation round-trip.
+
+**If your client cannot prompt at all.** Some clients never negotiate elicitation, so there is
+no dialog to click and the gate resolves `unsupported` every time. The tool's own response says
+so and tells you what to do — it comes back with `gate_outcome: "unsupported"` and a `next_step`
+asking for `confirm=true`. This is the one case where passing `confirm` is correct: nobody could
+be asked, so the flag is the only approval path there is. It cannot be used to slip past someone
+who refused, because a `declined` or `cancelled` outcome ignores it.
+
+Note the trap all of this replaces: an approval that produced no change used to be
+indistinguishable from a refusal, because both simply returned a preview. The `outcome` field
+exists precisely so consent failures cannot hide as "nothing happened".
 
 ### Read it like a detective
 
@@ -1319,7 +1441,7 @@ typed error) climbs back up:
 ┌──────────────────────────────────────────────────────────────┐
 │ server.py        @mcp.tool / @mcp.resource / @mcp.prompt       │  the MCP surface
 ├──────────────────────────────────────────────────────────────┤
-│ _runtime.py      run_tool · should_commit · emit_progress      │  cross-cutting
+│ _runtime.py      run_tool · evaluate_write_gate · emit_progress │  cross-cutting
 ├──────────────────────────────────────────────────────────────┤
 │ tools/*.py       validate → map raw→typed → dry-run/commit     │  business logic
 ├──────────────────────────────────────────────────────────────┤
@@ -1492,8 +1614,10 @@ class CreateEntryInput(WriteInput):
 Because `run_tool` constructs the `*Input` model at the top of the call, a malformed number
 raises `ValueError` **before** `run_tool` reaches the API — which is exactly why the Chapter 3
 bad-number attempt produced a `tool.error` with no `wxcc_api_call`. `WriteInput` also carries the
-`confirm` fallback flag (used only when the client has no elicitation support), and `WriteOutput`
-is the shared dry-run-or-committed result shape.
+`confirm` fallback flag — consulted **only** when the gate could not reach a human at all, never
+to override a refusal — and `WriteOutput` is the shared dry-run-or-committed result shape, which
+also carries `gate_outcome`, `gate_reason`, and `next_step` so a blocked write explains itself to
+the caller and not just to the log.
 
 ### 10.6: Which file do I open when X breaks?
 
@@ -1522,6 +1646,7 @@ their shared `request_id` (all fields below are keys in the structured JSON):
 
 | Stage | Structured event (JSON) | Key fields | Meaning |
 |---|---|---|---|
+| Gate *(writes only)* | `write_gate` | `outcome`, `action`, `committed`, `reason`, `elicit_ms`, `client`, `client_detail` | how consent resolved, how long the client took, and who answered — precedes `tool.received` |
 | Received | `tool.received` | `tool`, `intent`, `request_id` | the tool round-trip started |
 | Auth | `using_static_access_token` / `oauth_token_refreshed` | *(inherits `request_id`)* | token brokered (redacted) |
 | API | `wxcc_api_call` | `method`, `path` | a real WxCC REST call went out |
@@ -1537,6 +1662,13 @@ their shared `request_id` (all fields below are keys in the structured JSON):
 - `tool.received` but no `wxcc_api_call` → rejected before the network (auth, validation, or a
   dry-run with `commit=False`).
 - `wxcc_api_call` but no `tool.result` → the call reached WxCC and failed there (see `tool.error`).
+- A write with `commit=False` in its `intent` → read the `write_gate` line for that id to learn
+  *why* consent was not obtained (§9, Scenario F).
+
+`write_gate` appears **before** `tool.received` rather than inside the tool's timed region, and
+that ordering is deliberate: the gate blocks on a human, so timing it would make every
+`elapsed_ms` a measure of how fast the operator clicks. The correlation id is minted before the
+gate and handed to both, which is what keeps the two on one trace.
 
 > **Security note.** Secrets never appear in the stream: the `_redact` processor scrubs
 > sensitive keys (`access_token`, `authorization`, `client_secret`, …) to `***REDACTED***`

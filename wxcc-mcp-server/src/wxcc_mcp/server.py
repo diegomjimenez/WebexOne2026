@@ -38,13 +38,15 @@ from mcp.server.fastmcp import Context, FastMCP
 
 from ._runtime import (
     emit_progress,
+    evaluate_write_gate,
     get_client,
     maybe_summarize,
+    new_request_id,
     run_tool,
     session_id,
-    should_commit,
 )
 from .config import get_settings
+from .icon import SERVER_ICON
 from .logging_config import configure_logging, get_logger
 from .models.schemas import (
     AssignAddressBookInput,
@@ -71,7 +73,6 @@ from .prompts import create_address_book as create_book_prompt
 from .prompts import provision_outbound_dialing as provision_prompt
 from .prompts import sync_crm_to_address_book as sync_prompt
 from .resources import address_book_schema_guide, crm_contacts, write_safety_guide
-from .icon import SERVER_ICON
 from .tools import address_books, agents, desktop_profiles, entries, sync
 
 logger = get_logger(__name__)
@@ -137,11 +138,25 @@ async def tool_get_address_book(
 
 
 # --- Anatomy of a *write* tool -------------------------------------------
-# Writes add one move before the three above: should_commit() asks the user to
-# approve (via MCP elicitation), falling back to the explicit `confirm` flag.
-# Without approval the underlying tools/ function returns a dry-run preview and
-# nothing hits Webex; only an approved call commits. Every write tool below
-# follows this same gate.
+# Writes add two moves before the three above:
+#
+#   0. mint the correlation id up front       → rid = new_request_id()
+#   0b. ask the user to approve the write     → evaluate_write_gate(..., request_id=rid)
+#
+# evaluate_write_gate() prompts via MCP elicitation and commits when the user
+# accepts. An explicit decline is final; the `confirm` flag is only consulted
+# when nobody could be asked. Without approval the underlying tools/ function
+# returns a dry-run preview and nothing hits Webex.
+#
+# The gate returns a *decision*, not a boolean, and that decision is handed to
+# run_tool() as `gate=`. That is what puts the reason a write previewed into the
+# tool's result, where the model and the user can see it — they never read the
+# server's stderr, so a bare "dry run" is indistinguishable from a bug.
+#
+# The id is minted here rather than inside run_tool() because the gate runs
+# *first* — a blocking user prompt inside run_tool's timed region would corrupt
+# every elapsed_ms the server reports. Passing the same id to both keeps the gate
+# decision and the tool's lifecycle events on one correlated trace.
 # -------------------------------------------------------------------------
 
 
@@ -154,10 +169,17 @@ async def tool_create_address_book(
     confirm: bool = False,
     ctx: Context = None,
 ) -> dict[str, Any]:
-    """Create an address book (elicitation-gated)."""
+    """Create an address book.
+
+    The server asks the user to approve this write interactively, so call it
+    without ``confirm`` when the client can prompt — setting it never skips the
+    user. On a client that cannot prompt at all, ``confirm`` is the only way to
+    commit; the result says so and asks for it once the user has agreed.
+    """
     client = get_client()
     sid = session_id(ctx)
-    commit = await should_commit(ctx, f"create address book {name}", confirm)
+    rid = new_request_id()
+    gate = await evaluate_write_gate(ctx, f"create address book '{name}'", confirm, request_id=rid)
     return await run_tool(
         lambda: address_books.run_create(
             client,
@@ -167,12 +189,14 @@ async def tool_create_address_book(
                 name=name,
                 parent_type=parent_type,
                 description=description,
-                confirm=commit,
+                confirm=gate.commit,
             ),
         ),
         ctx,
         tool_name="create_address_book",
-        intent=f"create address book '{name}' (commit={commit})",
+        intent=f"create address book '{name}' (commit={gate.commit})",
+        request_id=rid,
+        gate=gate,
     )
 
 
@@ -185,10 +209,19 @@ async def tool_update_address_book(
     confirm: bool = False,
     ctx: Context = None,
 ) -> dict[str, Any]:
-    """Update an address book (elicitation-gated)."""
+    """Update an address book.
+
+    The server asks the user to approve this write interactively, so call it
+    without ``confirm`` when the client can prompt — setting it never skips the
+    user. On a client that cannot prompt at all, ``confirm`` is the only way to
+    commit; the result says so and asks for it once the user has agreed.
+    """
     client = get_client()
     sid = session_id(ctx)
-    commit = await should_commit(ctx, f"update address book {address_book_id}", confirm)
+    rid = new_request_id()
+    gate = await evaluate_write_gate(
+        ctx, f"update address book {address_book_id}", confirm, request_id=rid
+    )
     return await run_tool(
         lambda: address_books.run_update(
             client,
@@ -198,12 +231,14 @@ async def tool_update_address_book(
                 address_book_id=address_book_id,
                 name=name,
                 description=description,
-                confirm=commit,
+                confirm=gate.commit,
             ),
         ),
         ctx,
         tool_name="update_address_book",
-        intent=f"update address book {address_book_id} (commit={commit})",
+        intent=f"update address book {address_book_id} (commit={gate.commit})",
+        request_id=rid,
+        gate=gate,
     )
 
 
@@ -211,19 +246,35 @@ async def tool_update_address_book(
 async def tool_delete_address_book(
     org_id: str, address_book_id: str, confirm: bool = False, ctx: Context = None
 ) -> dict[str, Any]:
-    """Delete an address book and all its entries (elicitation-gated, HIGH risk)."""
+    """Delete an address book and all its entries (HIGH risk).
+
+    The server asks the user to approve this deletion interactively, so call it
+    without ``confirm`` when the client can prompt — setting it never skips the
+    user. On a client that cannot prompt at all, ``confirm`` is the only way to
+    commit; the result says so and asks for it once the user has agreed.
+    """
     client = get_client()
     sid = session_id(ctx)
-    commit = await should_commit(ctx, f"delete address book {address_book_id}", confirm)
+    rid = new_request_id()
+    gate = await evaluate_write_gate(
+        ctx,
+        f"DELETE address book {address_book_id} and every entry it contains",
+        confirm,
+        request_id=rid,
+    )
     return await run_tool(
         lambda: address_books.run_delete(
             client,
             sid,
-            DeleteAddressBookInput(org_id=org_id, address_book_id=address_book_id, confirm=commit),
+            DeleteAddressBookInput(
+                org_id=org_id, address_book_id=address_book_id, confirm=gate.commit
+            ),
         ),
         ctx,
         tool_name="delete_address_book",
-        intent=f"delete address book {address_book_id} (commit={commit})",
+        intent=f"delete address book {address_book_id} (commit={gate.commit})",
+        request_id=rid,
+        gate=gate,
     )
 
 
@@ -295,10 +346,19 @@ async def tool_create_entry(
     confirm: bool = False,
     ctx: Context = None,
 ) -> dict[str, Any]:
-    """Create an address book entry with an E.164 number (elicitation-gated)."""
+    """Create an address book entry with an E.164 number.
+
+    The server asks the user to approve this write interactively, so call it
+    without ``confirm`` when the client can prompt — setting it never skips the
+    user. On a client that cannot prompt at all, ``confirm`` is the only way to
+    commit; the result says so and asks for it once the user has agreed.
+    """
     client = get_client()
     sid = session_id(ctx)
-    commit = await should_commit(ctx, f"create entry {name} ({number})", confirm)
+    rid = new_request_id()
+    gate = await evaluate_write_gate(
+        ctx, f"create entry '{name}' ({number})", confirm, request_id=rid
+    )
     return await run_tool(
         lambda: entries.run_create(
             client,
@@ -309,12 +369,14 @@ async def tool_create_entry(
                 name=name,
                 number=number,
                 crm_id=crm_id,
-                confirm=commit,
+                confirm=gate.commit,
             ),
         ),
         ctx,
         tool_name="create_entry",
-        intent=f"create entry '{name}' ({number}) (commit={commit})",
+        intent=f"create entry '{name}' ({number}) (commit={gate.commit})",
+        request_id=rid,
+        gate=gate,
     )
 
 
@@ -328,10 +390,17 @@ async def tool_update_entry(
     confirm: bool = False,
     ctx: Context = None,
 ) -> dict[str, Any]:
-    """Update an address book entry (elicitation-gated)."""
+    """Update an address book entry.
+
+    The server asks the user to approve this write interactively, so call it
+    without ``confirm`` when the client can prompt — setting it never skips the
+    user. On a client that cannot prompt at all, ``confirm`` is the only way to
+    commit; the result says so and asks for it once the user has agreed.
+    """
     client = get_client()
     sid = session_id(ctx)
-    commit = await should_commit(ctx, f"update entry {entry_id}", confirm)
+    rid = new_request_id()
+    gate = await evaluate_write_gate(ctx, f"update entry {entry_id}", confirm, request_id=rid)
     return await run_tool(
         lambda: entries.run_update(
             client,
@@ -342,12 +411,14 @@ async def tool_update_entry(
                 entry_id=entry_id,
                 name=name,
                 number=number,
-                confirm=commit,
+                confirm=gate.commit,
             ),
         ),
         ctx,
         tool_name="update_entry",
-        intent=f"update entry {entry_id} (commit={commit})",
+        intent=f"update entry {entry_id} (commit={gate.commit})",
+        request_id=rid,
+        gate=gate,
     )
 
 
@@ -355,21 +426,35 @@ async def tool_update_entry(
 async def tool_delete_entry(
     org_id: str, address_book_id: str, entry_id: str, confirm: bool = False, ctx: Context = None
 ) -> dict[str, Any]:
-    """Delete an address book entry (elicitation-gated, HIGH risk)."""
+    """Delete an address book entry (HIGH risk).
+
+    The server asks the user to approve this deletion interactively, so call it
+    without ``confirm`` when the client can prompt — setting it never skips the
+    user. On a client that cannot prompt at all, ``confirm`` is the only way to
+    commit; the result says so and asks for it once the user has agreed.
+    """
     client = get_client()
     sid = session_id(ctx)
-    commit = await should_commit(ctx, f"delete entry {entry_id}", confirm)
+    rid = new_request_id()
+    gate = await evaluate_write_gate(
+        ctx, f"DELETE entry {entry_id} from address book {address_book_id}", confirm, request_id=rid
+    )
     return await run_tool(
         lambda: entries.run_delete(
             client,
             sid,
             DeleteEntryInput(
-                org_id=org_id, address_book_id=address_book_id, entry_id=entry_id, confirm=commit
+                org_id=org_id,
+                address_book_id=address_book_id,
+                entry_id=entry_id,
+                confirm=gate.commit,
             ),
         ),
         ctx,
         tool_name="delete_entry",
-        intent=f"delete entry {entry_id} (commit={commit})",
+        intent=f"delete entry {entry_id} (commit={gate.commit})",
+        request_id=rid,
+        gate=gate,
     )
 
 
@@ -381,14 +466,25 @@ async def tool_bulk_save_entries(
     confirm: bool = False,
     ctx: Context = None,
 ) -> dict[str, Any]:
-    """Bulk-save entries into an address book (elicitation-gated).
+    """Bulk-save entries into an address book.
 
     ``entries_payload`` is a list of ``{"name", "number", "crm_id"?}`` objects;
     each number must be valid E.164.
+
+    The server asks the user to approve this write interactively, so call it
+    without ``confirm`` when the client can prompt — setting it never skips the
+    user. On a client that cannot prompt at all, ``confirm`` is the only way to
+    commit; the result says so and asks for it once the user has agreed.
     """
     client = get_client()
     sid = session_id(ctx)
-    commit = await should_commit(ctx, f"bulk save {len(entries_payload)} entries", confirm)
+    rid = new_request_id()
+    gate = await evaluate_write_gate(
+        ctx,
+        f"bulk save {len(entries_payload)} entries into address book {address_book_id}",
+        confirm,
+        request_id=rid,
+    )
     return await run_tool(
         lambda: entries.run_bulk_save(
             client,
@@ -397,12 +493,14 @@ async def tool_bulk_save_entries(
                 org_id=org_id,
                 address_book_id=address_book_id,
                 entries=[EntryInput(**e) for e in entries_payload],
-                confirm=commit,
+                confirm=gate.commit,
             ),
         ),
         ctx,
         tool_name="bulk_save_entries",
-        intent=f"bulk save {len(entries_payload)} entries (commit={commit})",
+        intent=f"bulk save {len(entries_payload)} entries (commit={gate.commit})",
+        request_id=rid,
+        gate=gate,
     )
 
 
@@ -500,15 +598,24 @@ async def tool_map_profiles_to_agents(
 async def tool_assign_address_book_to_profile(
     org_id: str, profile_id: str, address_book_id: str, confirm: bool = False, ctx: Context = None
 ) -> dict[str, Any]:
-    """Assign an address book to a desktop profile (elicitation-gated).
+    """Assign an address book to a desktop profile.
 
     Changes only ``addressBookId``; all other (non-deprecated) profile fields are
     preserved.
+
+    The server asks the user to approve this write interactively, so call it
+    without ``confirm`` when the client can prompt — setting it never skips the
+    user. On a client that cannot prompt at all, ``confirm`` is the only way to
+    commit; the result says so and asks for it once the user has agreed.
     """
     client = get_client()
     sid = session_id(ctx)
-    commit = await should_commit(
-        ctx, f"assign address book {address_book_id} to profile {profile_id}", confirm
+    rid = new_request_id()
+    gate = await evaluate_write_gate(
+        ctx,
+        f"assign address book {address_book_id} to profile {profile_id}",
+        confirm,
+        request_id=rid,
     )
     return await run_tool(
         lambda: desktop_profiles.run_assign_address_book(
@@ -518,12 +625,14 @@ async def tool_assign_address_book_to_profile(
                 org_id=org_id,
                 profile_id=profile_id,
                 address_book_id=address_book_id,
-                confirm=commit,
+                confirm=gate.commit,
             ),
         ),
         ctx,
         tool_name="assign_address_book_to_profile",
-        intent=f"assign book {address_book_id} to profile {profile_id} (commit={commit})",
+        intent=f"assign book {address_book_id} to profile {profile_id} (commit={gate.commit})",
+        request_id=rid,
+        gate=gate,
     )
 
 
@@ -541,20 +650,28 @@ async def tool_sync_crm_to_address_book(
     confirm: bool = False,
     ctx: Context = None,
 ) -> dict[str, Any]:
-    """Sync CRM contacts into an address book (elicitation-gated composite).
+    """Sync CRM contacts into an address book (composite).
 
-    Reads the CRM source, diffs it against existing entries, and returns a
-    dry-run preview (counts to create/update/delete). On approval it applies the
-    plan, streaming per-entry progress and logs. ``prune`` (delete entries absent
-    from the CRM source) is OFF by default. When ``summarize`` is set and the
-    client supports sampling, a natural-language summary is added.
+    Reads the CRM source, diffs it against existing entries, then asks the user
+    to approve the plan. On approval it creates, updates, and — when ``prune`` is
+    set — deletes entries. On refusal it returns the dry-run preview.
+
+    Call this without ``confirm`` when the client can prompt: the server asks the
+    user itself, and setting the flag never skips them. On a client that cannot
+    prompt at all, ``confirm`` is the only way to commit; the result says so and
+    asks for it once the user has agreed.
+
+    ``prune`` (delete entries absent from the CRM source) is OFF by default and
+    is disclosed in the approval prompt when set. When ``summarize`` is set and
+    the client supports sampling, a natural-language summary is added.
     """
     client = get_client()
     sid = session_id(ctx)
+    rid = new_request_id()
     summary = f"sync CRM into address book {address_book_id}"
     if prune:
-        summary += " (with pruning — deletes entries absent from CRM)"
-    commit = await should_commit(ctx, summary, confirm)
+        summary += " — WILL DELETE entries absent from the CRM source"
+    gate = await evaluate_write_gate(ctx, summary, confirm, request_id=rid)
 
     async def _progress(done: float, total: float, message: str) -> None:
         await emit_progress(ctx, done, total, message)
@@ -573,14 +690,16 @@ async def tool_sync_crm_to_address_book(
                 address_book_id=address_book_id,
                 prune=prune,
                 summarize=summarize,
-                confirm=commit,
+                confirm=gate.commit,
             ),
             on_progress=_progress,
             on_log=_log,
         ),
         ctx,
         tool_name="sync_crm_to_address_book",
-        intent=f"sync CRM into address book {address_book_id} (commit={commit})",
+        intent=f"sync CRM into address book {address_book_id} (commit={gate.commit})",
+        request_id=rid,
+        gate=gate,
     )
     if "error" not in result and summarize:
         llm_summary = await maybe_summarize(ctx, result)

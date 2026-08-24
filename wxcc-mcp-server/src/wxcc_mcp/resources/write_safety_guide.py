@@ -16,10 +16,15 @@ SAFETY_PRINCIPLES: list[dict[str, str]] = [
     {
         "principle": "Ask Before You Commit",
         "description": (
-            "Every write tool is gated. When the MCP client supports elicitation, "
-            "the tool asks the admin to approve interactively before committing. "
-            "When elicitation is unavailable, the tool falls back to confirm=False "
-            "(a dry-run preview) and only commits when confirm=True is passed."
+            "Every write tool is gated. The server asks the admin to approve the "
+            "write interactively: accepting the prompt IS the approval, and "
+            "declining or cancelling is final — it returns a dry-run preview and "
+            "cannot be overridden by an argument. Invoke write tools without the "
+            "confirm flag and let the prompt decide. On a client that cannot "
+            "prompt at all, no approval can be requested and confirm becomes the "
+            "only way to commit — the result says so explicitly when that "
+            "happens, and asks for confirm once the admin has agreed in "
+            "conversation. Setting it never skips a prompt that could be shown."
         ),
     },
     {
