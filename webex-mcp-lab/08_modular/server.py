@@ -1,0 +1,48 @@
+"""Step 08 - the same server, built to grow.
+
+Steps 01 to 07 each put everything in one file, which is the right shape for
+learning and the wrong shape for a server you keep. This one splits into three
+kinds of file and nothing else:
+
+    webex_client.py   credentials and HTTP, resolved once
+    tools/<domain>.py one file per subject area
+    server.py         this file - decides which domains are switched on
+
+The whole extension mechanism is the DOMAINS list below. To add a subject area,
+write `tools/your_domain.py` with a `register(mcp, client)` function and add it
+to the list. Nothing else in the server changes, and no existing domain module
+is touched. To switch one off, delete its line.
+
+No Contact Center organization? Remove `address_books` from DOMAINS and the
+rest of the server runs exactly as before.
+
+Run it:
+    uv run --env-file .env python 08_modular/server.py
+"""
+
+from mcp.server import MCPServer
+
+from tools import address_books, messaging
+from webex_client import WebexClient
+
+# Registration is an explicit list, not a directory scan. You can read this and
+# know precisely what the server exposes - and so can a reviewer.
+DOMAINS = [
+    messaging,
+    address_books,
+]
+
+
+def main() -> None:
+    """Resolve credentials once, hand them to every domain, and serve."""
+    client = WebexClient()
+    mcp = MCPServer("webex-mcp-lab")
+
+    for domain in DOMAINS:
+        domain.register(mcp, client)
+
+    mcp.run()
+
+
+if __name__ == "__main__":
+    main()
