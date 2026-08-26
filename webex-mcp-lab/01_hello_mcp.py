@@ -4,7 +4,7 @@ No Webex, no network, no token. The only question this file answers is:
 what does it take to make a Python function callable by an AI assistant?
 
 Run it:
-    uv run python 01_hello_mcp.py
+    python 01_hello_mcp.py
 
 It will sit there silently. That is correct - an MCP server talks over stdin
 and stdout, so there is nothing to see until a client connects to it.

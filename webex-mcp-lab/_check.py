@@ -3,8 +3,8 @@
 Connects to a numbered script over stdio as a real MCP client would, and prints
 the tools, resources, and prompts it advertises.
 
-    uv run python _check.py 01_hello_mcp.py
-    uv run python _check.py 03_rooms.py --call list_rooms
+    python _check.py 01_hello_mcp.py
+    python _check.py 03_rooms.py --call list_rooms
 """
 
 import asyncio

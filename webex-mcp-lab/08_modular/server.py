@@ -17,7 +17,7 @@ No Contact Center organization? Remove `address_books` from DOMAINS and the
 rest of the server runs exactly as before.
 
 Run it:
-    uv run --env-file .env python 08_modular/server.py
+    python 08_modular/server.py
 """
 
 from mcp.server import MCPServer

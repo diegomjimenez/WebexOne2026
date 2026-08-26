@@ -4,23 +4,28 @@ New in this step: the tool actually talks to Webex, using a token read from
 the environment.
 
 Run it:
-    uv run --env-file .env python 02_whoami.py
+    python 02_whoami.py
 """
 
 import os
 import sys
 
 import httpx
+from dotenv import load_dotenv
 from mcp.server import MCPServer
 
 WEBEX_API = "https://webexapis.com/v1"
+
+# Load .env so the token is present however this script is launched - from a
+# terminal or by an MCP client - with no --env-file flag needed.
+load_dotenv()
 
 # Read the token once, at startup. A missing token discovered mid-tool-call
 # shows up as a confusing 401 instead of the clear message below.
 TOKEN = os.environ.get("WEBEX_ACCESS_TOKEN")
 if not TOKEN:
     sys.exit("WEBEX_ACCESS_TOKEN is not set. Copy .env.example to .env, add "
-             "your token, and re-run with --env-file .env")
+             "your token, and re-run.")
 
 mcp = MCPServer("webex-mcp-lab-02")
 

@@ -19,14 +19,19 @@ this is a shared lab organization, so the destructive verbs are left out on
 purpose. Cleaning up afterwards is an administrator's job.
 
 Run it:
-    uv run --env-file .env python 07_address_book.py
+    python 07_address_book.py
 """
 
 import os
 import sys
 
 import httpx
+from dotenv import load_dotenv
 from mcp.server import MCPServer
+
+# Load .env so the credentials are present however this script is launched -
+# from a terminal or by an MCP client - with no --env-file flag needed.
+load_dotenv()
 
 TOKEN = os.environ.get("WEBEX_ACCESS_TOKEN")
 ORG_ID = os.environ.get("WEBEX_ORG_ID")

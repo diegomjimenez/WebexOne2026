@@ -1,0 +1,10 @@
+# Install with:  pip install -r requirements.txt
+#
+# mcp's 2.x line renamed FastMCP to MCPServer, so the upper bound is deliberate:
+# an unpinned major version would silently break every script here.
+mcp>=2.1,<3
+httpx>=0.27
+
+# uv used to load .env via `--env-file`. It is gone now, so the scripts load
+# .env themselves - that is what this package is for.
+python-dotenv>=1.0

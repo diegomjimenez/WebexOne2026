@@ -38,39 +38,41 @@ top to bottom without following an import anywhere else.
 
 ## Setup
 
-You need three things: Python, `uv`, and a Webex access token. Nothing is
+You need two things: Python 3.10 or newer, and a Webex access token. Nothing is
 generated, nothing is stored, and there is no sign-in flow to complete.
 
-### 1. Install uv
+### 1. Create and activate a virtual environment
 
-`uv` runs Python and installs dependencies. Pick your platform:
+From the lab folder, make an isolated environment for the lab's dependencies:
 
 **Windows (PowerShell)**
 
 ```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+cd webex-mcp-lab
+python -m venv .venv
+.venv\Scripts\Activate.ps1
 ```
 
 **macOS and Linux**
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-Close and reopen your terminal, then check it:
-
-```
-uv --version
-```
-
-### 2. Get the lab files and install dependencies
-
-```
 cd webex-mcp-lab
-uv sync
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-That installs exactly two packages, `mcp` and `httpx`, into a local `.venv`.
+Your prompt now shows `(.venv)`. Activate it again in every new terminal you
+open for this lab.
+
+### 2. Install dependencies
+
+```
+pip install -r requirements.txt
+```
+
+That installs three packages into `.venv`: `mcp`, `httpx`, and `python-dotenv`.
+The first two do the work. The third loads your token from `.env` at startup —
+the one job `uv` used to do from outside the code, now done in the open.
 
 ### 3. Get a Webex access token
 
@@ -115,7 +117,7 @@ into a chat window or a screenshot.
 ### 5. Check it works
 
 ```
-uv run --env-file .env python 01_hello_mcp.py
+python 01_hello_mcp.py
 ```
 
 The command will appear to hang. **That is correct.** An MCP server talks over
@@ -153,20 +155,21 @@ Create `.vscode/mcp.json` in your workspace:
 {
   "servers": {
     "webex-mcp-lab": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--directory", "/absolute/path/to/webex-mcp-lab",
-        "--env-file", ".env",
-        "python", "01_hello_mcp.py"
-      ]
+      "command": "/absolute/path/to/webex-mcp-lab/.venv/Scripts/python.exe",
+      "args": ["01_hello_mcp.py"],
+      "cwd": "/absolute/path/to/webex-mcp-lab"
     }
   }
 }
 ```
 
-Replace the path with your own, and change the script name as you work through
-the chapters. Use forward slashes on every platform, including Windows.
+Point `command` at the Python interpreter inside your `.venv`, and set `cwd` to
+the lab folder so the server finds your `.env`. On macOS and Linux the
+interpreter is `.venv/bin/python` instead of `.venv/Scripts/python.exe`.
+
+Replace both paths with your own, and change the script name as you work through
+the chapters. Use forward slashes on every platform, including Windows. No
+environment-file flag is needed — the server loads `.env` itself.
 
 ![Visual Studio Code showing the webex-mcp-lab server connected, with the greet tool listed in the tool picker](images/00-vscode-connected-vscode.png)
 
@@ -232,7 +235,7 @@ Two things arrive in this step. The first is the token, read once at startup:
 TOKEN = os.environ.get("WEBEX_ACCESS_TOKEN")
 if not TOKEN:
     sys.exit("WEBEX_ACCESS_TOKEN is not set. Copy .env.example to .env, add "
-             "your token, and re-run with --env-file .env")
+             "your token, and re-run.")
 ```
 
 Checking at startup rather than inside the tool is deliberate. A server that
@@ -559,6 +562,48 @@ missing variable and the domain that wanted it — rather than once per tool
 call, as a 403.
 
 ![The modular server connected, showing tools from both domains in one list](images/08-modular-vscode.png)
+
+---
+
+## Add your own Webex API family
+
+Chapter 08 gave you the mechanism. Here is the recipe. There is a starting point
+in the tree for exactly this: `08_modular/tools/_template.py`. It is a complete
+domain module that does nothing yet — it is not in `DOMAINS`, and its one tool
+returns placeholder data over no network — so copying it is safe and changes
+nothing until you wire it in.
+
+Five steps:
+
+1. **Copy the template.** `tools/_template.py` → `tools/<your_domain>.py`
+   (for example `calling.py` or `meetings.py`).
+2. **Rename the tool** and rewrite its docstring to say what it does. The
+   docstring is how the model decides whether to call it, so make it specific.
+3. **Point it at an endpoint.** Replace the placeholder body with a
+   `client.request(...)` call. **This is the one place the API family is
+   chosen** — Webex Calling, Meetings, and Contact Center are all just a
+   different URL here; the contract around it does not change.
+4. **Register it.** Add your module to the `DOMAINS` list in `server.py` — one
+   line, exactly as `messaging` and `address_books` are already listed.
+5. **Restart.** Your new tool appears alongside the others.
+
+Which API you wrap is the only real decision, and it lives entirely in step 3:
+
+| Target | Where its calls go |
+|---|---|
+| Webex Calling | the Calling APIs under `https://webexapis.com/v1` |
+| Webex Meetings | the Meetings APIs under `https://webexapis.com/v1` |
+| Contact Center | a Contact Center base URL — copy the org/base pattern from `address_books.py` |
+
+Two notes so you are not surprised:
+
+- **Nothing new to install or configure.** The recipe adds no dependency and no
+  new environment variable beyond what chapter 08 already documents. A domain
+  that needs extra credentials asks for them at registration time with
+  `client.require(...)` — copy that shape from `address_books.py`.
+- **The template tool is read-only on purpose.** For a write, copy the
+  `send_message` or `create_address_book` shape instead; for extra configuration,
+  copy the `client.require(...)` line. Both live in files you already have.
 
 ---
 

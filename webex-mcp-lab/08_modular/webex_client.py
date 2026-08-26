@@ -10,6 +10,11 @@ import os
 import sys
 
 import httpx
+from dotenv import load_dotenv
+
+# This is the only file that reads the environment, so it is the only file that
+# loads .env - no --env-file flag needed, however the server is launched.
+load_dotenv()
 
 WEBEX_API = "https://webexapis.com/v1"
 
@@ -29,7 +34,7 @@ class WebexClient:
         if not self._token:
             sys.exit(
                 "WEBEX_ACCESS_TOKEN is not set. Copy .env.example to .env, add "
-                "your token, and re-run with --env-file .env"
+                "your token, and re-run."
             )
 
     def require(self, *names: str, needed_by: str) -> dict:
