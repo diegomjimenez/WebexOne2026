@@ -151,4 +151,8 @@ async def add_entry(address_book_id: str, name: str, number: str) -> dict:
 
 
 if __name__ == "__main__":
+    # A one-line banner to stderr so the terminal shows the server is alive.
+    # It must go to stderr, not stdout - stdout carries the MCP protocol.
+    print("webex-mcp-lab-07 running on stdio - waiting for a client (Ctrl+C to stop).",
+          file=sys.stderr)
     mcp.run()

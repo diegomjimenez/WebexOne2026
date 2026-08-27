@@ -6,9 +6,12 @@ what does it take to make a Python function callable by an AI assistant?
 Run it:
     python 01_hello_mcp.py
 
-It will sit there silently. That is correct - an MCP server talks over stdin
-and stdout, so there is nothing to see until a client connects to it.
+It prints one line to stderr to say it is ready, then waits silently. That is
+correct - an MCP server talks over stdin and stdout, so there is nothing more to
+see until a client connects to it.
 """
+
+import sys
 
 from mcp.server import MCPServer
 
@@ -37,4 +40,8 @@ async def greet(name: str) -> str:
 
 
 if __name__ == "__main__":
+    # A one-line banner to stderr so the terminal shows the server is alive.
+    # It must go to stderr, not stdout - stdout carries the MCP protocol.
+    print("webex-mcp-lab-01 running on stdio - waiting for a client (Ctrl+C to stop).",
+          file=sys.stderr)
     mcp.run()

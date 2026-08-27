@@ -120,9 +120,10 @@ into a chat window or a screenshot.
 python 01_hello_mcp.py
 ```
 
-The command will appear to hang. **That is correct.** An MCP server talks over
-standard input and output, so there is nothing to print until a client connects.
-Press `Ctrl+C` to stop it.
+It prints one line — `webex-mcp-lab-01 running on stdio ...` — and then appears
+to hang. **That is correct.** The banner goes to stderr; the server then waits
+on stdin/stdout for a client to connect, so there is nothing more to print until
+one does. Press `Ctrl+C` to stop it.
 
 ### What you need for which chapter
 

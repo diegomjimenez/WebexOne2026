@@ -98,4 +98,8 @@ async def send_message(room_id: str, text: str) -> dict:
 
 
 if __name__ == "__main__":
+    # A one-line banner to stderr so the terminal shows the server is alive.
+    # It must go to stderr, not stdout - stdout carries the MCP protocol.
+    print("webex-mcp-lab-04 running on stdio - waiting for a client (Ctrl+C to stop).",
+          file=sys.stderr)
     mcp.run()

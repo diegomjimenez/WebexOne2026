@@ -20,6 +20,8 @@ Run it:
     python 08_modular/server.py
 """
 
+import sys
+
 from mcp.server import MCPServer
 
 from tools import address_books, messaging
@@ -41,6 +43,10 @@ def main() -> None:
     for domain in DOMAINS:
         domain.register(mcp, client)
 
+    # A one-line banner to stderr so the terminal shows the server is alive.
+    # It must go to stderr, not stdout - stdout carries the MCP protocol.
+    print("webex-mcp-lab running on stdio - waiting for a client (Ctrl+C to stop).",
+          file=sys.stderr)
     mcp.run()
 
 
