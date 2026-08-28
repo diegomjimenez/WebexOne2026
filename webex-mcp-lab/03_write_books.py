@@ -1,75 +1,74 @@
-"""Step 07 - a second API family: Webex Contact Center.
+"""Step 03 - writing: create a book, then fill it with contacts.
 
-PREREQUISITE. Unlike steps 01-06, this one needs more than a developer token:
+Step 02 only read. This step writes, and it introduces two ideas at once:
 
-  * a Webex Contact Center organization, and a token whose scopes include
-    cjp:config_read and cjp:config_write
-  * WEBEX_ORG_ID   - your Contact Center organization id
-  * WEBEX_CC_API_BASE - your data centre, e.g. https://api.wxcc-us1.cisco.com
+  * Writing and consent. `create_address_book` and `add_entry` change your
+    organization. Notice what is NOT in them: no `confirm` argument, no preview
+    step. Consent belongs to the host - your MCP client shows you the tool and
+    its arguments and waits for your approval before the function is ever
+    entered. A server that adds its own dialog only teaches people to click
+    through two. (There are also no delete tools here, on purpose: address books
+    are shared configuration, so the destructive verbs are simply left out.)
 
-If you do not have a Contact Center organization, stop here. Step 08 revisits
-everything you need without it.
+  * Chaining. `create_address_book` returns the new book's id; `add_entry` takes
+    that id as its first argument. Watch the model carry the id from one call
+    into the next - that is most of what "using tools together" means.
 
-Nothing about MCP changes in this file. The decorators, the result shapes, and
-the consent model are identical to step 04 - only the host and the URLs differ.
-That is the point: once you can wrap one API, you can wrap any API.
-
-Note there are no delete tools here. Address books are shared configuration and
-this is a shared lab organization, so the destructive verbs are left out on
-purpose. Cleaning up afterwards is an administrator's job.
+Same three credentials as step 02.
 
 Run it:
-    python 07_address_book.py
+    python 03_write_books.py
 """
 
 import logging
 import os
 import sys
+from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
 from mcp.server import MCPServer
 
-# Server-side logging -> stderr (never stdout, which carries the MCP protocol),
-# independent of the client, DEBUG by default. The token is never logged.
+# Server-side logging -> stderr AND a file beside this script
+# (03_write_books.log), one shared format, DEBUG by default. stdout carries the
+# MCP protocol, so logs never go there. The token and a contact's number are
+# never logged.
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 log = logging.getLogger("webex")
 log.setLevel(logging.DEBUG)
 log.propagate = False
-log.addHandler(logging.StreamHandler(sys.stderr))
+for _handler in (
+    logging.StreamHandler(sys.stderr),
+    logging.FileHandler(Path(__file__).with_suffix(".log"), encoding="utf-8"),
+):
+    _handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    log.addHandler(_handler)
 
-# Load .env so the credentials are present however this script is launched -
-# from a terminal or by an MCP client - with no --env-file flag needed.
 load_dotenv()
 
 TOKEN = os.environ.get("WEBEX_ACCESS_TOKEN")
 ORG_ID = os.environ.get("WEBEX_ORG_ID")
-CC_API_BASE = os.environ.get("WEBEX_CC_API_BASE", "")
+CONFIG_API_BASE = os.environ.get("WXCC_CONFIG_API_BASE", "")
 
-# Check every credential at startup and name the one that is missing. A server
-# that starts and then fails on each call is much harder to diagnose than one
-# that refuses to start and says why.
 for _name, _value in (
     ("WEBEX_ACCESS_TOKEN", TOKEN),
     ("WEBEX_ORG_ID", ORG_ID),
-    ("WEBEX_CC_API_BASE", CC_API_BASE),
+    ("WXCC_CONFIG_API_BASE", CONFIG_API_BASE),
 ):
     if not _value:
-        sys.exit(f"{_name} is not set. This step needs Webex Contact Center - see .env.example.")
+        sys.exit(f"{_name} is not set. This lab needs Webex Contact Center - see .env.example.")
 
-if "REGION" in CC_API_BASE:
-    sys.exit("WEBEX_CC_API_BASE still says REGION. Replace it with your data centre, e.g. us1.")
-
-ORG = f"{CC_API_BASE.rstrip('/')}/organization/{ORG_ID}"
+ORG = f"{CONFIG_API_BASE.rstrip('/')}/organization/{ORG_ID}"
 HEADERS = {"Authorization": f"Bearer {TOKEN}"}
 
-mcp = MCPServer("webex-mcp-lab-07")
+mcp = MCPServer("webex-mcp-lab-03")
 
 
 def _fail(response: httpx.Response) -> dict:
     """Turn an HTTP failure into a sentence the model can pass on to the user."""
     # One place every failure passes through, so one log line covers them all.
-    # This is where the log earns its keep - a 403 in the terminal tells you
-    # it is a scope problem long before you read the returned sentence.
+    # This is where the log earns its keep - a 403 in the terminal tells you it
+    # is a scope problem long before you read the returned sentence.
     log.debug("Contact Center request failed: HTTP %s", response.status_code)
     if response.status_code == 401:
         return {"error": "Webex rejected the token. Check that it has not expired."}
@@ -104,7 +103,7 @@ async def list_address_books(limit: int = 50) -> dict:
 
 @mcp.tool()
 async def create_address_book(name: str, description: str = "") -> dict:
-    """Create a new address book.
+    """Create a new address book. Returns its id, which add_entry then needs.
 
     Your MCP client asks for approval before this runs.
     """
@@ -126,12 +125,14 @@ async def create_address_book(name: str, description: str = "") -> dict:
 
 @mcp.tool()
 async def list_entries(address_book_id: str, search: str = "") -> dict:
-    """List the contacts inside one address book, optionally filtered by `search`."""
+    """List the contacts inside one address book, optionally filtered by `search`.
+
+    Pass the `address_book_id` you got from create_address_book or list_address_books.
+    """
     params: dict = {"page": 0, "pageSize": 100}
     if search:
         params["search"] = search
 
-    # Listing entries is the one operation on v2; the others below are v1.
     log.debug("list_entries: GET %s/v2/address-book/%s/entry", ORG, address_book_id)
     async with httpx.AsyncClient(timeout=15) as http:
         response = await http.get(
@@ -153,10 +154,11 @@ async def list_entries(address_book_id: str, search: str = "") -> dict:
 async def add_entry(address_book_id: str, name: str, number: str) -> dict:
     """Add a contact to an address book. `number` should be E.164, e.g. +14155550101.
 
-    Your MCP client asks for approval before this runs.
+    `address_book_id` is the id create_address_book returned. Your MCP client
+    asks for approval before this runs.
     """
-    # Log that an entry is being added and to which book; the contact's name
-    # and number are not logged - the same restraint as the message body in 04.
+    # Log which book is being written to; the contact's name and number are not
+    # logged - the same restraint the whole lab keeps about anything sensitive.
     log.debug("add_entry: POST %s/address-book/%s/entry", ORG, address_book_id)
     async with httpx.AsyncClient(timeout=15) as http:
         response = await http.post(
@@ -175,6 +177,6 @@ async def add_entry(address_book_id: str, name: str, number: str) -> dict:
 if __name__ == "__main__":
     # A one-line banner to stderr so the terminal shows the server is alive.
     # It must go to stderr, not stdout - stdout carries the MCP protocol.
-    print("webex-mcp-lab-07 running on stdio - waiting for a client (Ctrl+C to stop).",
+    print("webex-mcp-lab-03 running on stdio - waiting for a client (Ctrl+C to stop).",
           file=sys.stderr)
     mcp.run()

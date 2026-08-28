@@ -28,18 +28,19 @@ def register(mcp, client) -> None:
         until then it returns fake data and touches no network.
         """
         # --- Replace everything below with your Webex endpoint -----------------
-        # A real read-only tool looks like the messaging domain's list_rooms:
+        # A real read-only tool looks like address_books.list_address_books:
         #
-        #     from webex_client import WEBEX_API, failure
-        #     response = await client.request("GET", f"{WEBEX_API}/<path>", params={...})
+        #     from webex_client import failure
+        #     response = await client.request("GET", f"{base}/<path>", params={...})
         #     if response.status_code != 200:
         #         return failure(response)
         #     items = response.json().get("items", [])
         #     return {"count": len(items), "items": [...keep only the fields that matter...]}
         #
-        # Point `client.request` at Webex Calling, Meetings, or Contact Center -
-        # the contract does not change, only the URL and the fields you keep. For
-        # a write tool or extra credentials, copy the shapes in address_books.py.
+        # Point `client.request` at Webex Calling, Meetings, or another Contact
+        # Center API - the contract does not change, only the URL and the fields
+        # you keep. For a write tool or extra credentials, copy the shapes in
+        # address_books.py.
         #
         # You do not add any logging here: client.request already writes a DEBUG
         # line for the request and the response, so this domain is traced the

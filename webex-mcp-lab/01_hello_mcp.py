@@ -10,22 +10,31 @@ It prints one line to stderr to say it is ready, then waits silently. That is
 correct - an MCP server talks over stdin and stdout, so there is nothing more to
 see until a client connects to it.
 
-It also keeps a log. Every tool call writes a DEBUG line to stderr so you can
-watch the server work. That log goes to stderr on purpose - stdout carries the
-MCP protocol - and it does not depend on the client at all.
+It also keeps a log. Every tool call writes a DEBUG line to stderr AND to a file
+beside this script (01_hello_mcp.log) so you can watch the server work and
+review past runs. The log goes to stderr on purpose - stdout carries the MCP
+protocol - and it does not depend on the client at all.
 """
 
 import logging
 import sys
+from pathlib import Path
 
 from mcp.server import MCPServer
 
-# Server-side logging -> stderr (never stdout, which carries the MCP protocol),
-# independent of the client, DEBUG by default. The token is never logged.
+# Server-side logging -> stderr AND a file beside this script (01_hello_mcp.log),
+# one shared format, DEBUG by default. stdout carries the MCP protocol, so logs
+# never go there. The file appends across runs so you can compare them.
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 log = logging.getLogger("webex")
 log.setLevel(logging.DEBUG)
 log.propagate = False
-log.addHandler(logging.StreamHandler(sys.stderr))
+for _handler in (
+    logging.StreamHandler(sys.stderr),
+    logging.FileHandler(Path(__file__).with_suffix(".log"), encoding="utf-8"),
+):
+    _handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    log.addHandler(_handler)
 
 # The server. Its name is what an MCP client displays in its UI.
 #

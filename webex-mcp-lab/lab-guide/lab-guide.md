@@ -1,35 +1,38 @@
 # Build a Webex MCP server
 
 A hands-on lab. By the end you will have written a server that lets an AI
-assistant read your Webex spaces, post messages, and manage Webex Contact
-Center address books — and you will understand every line of it.
+assistant manage Webex Contact Center address books — list them, create them,
+and fill them with contacts — and you will understand every line of it.
+
+The whole lab lives in one domain: **address books.** Every MCP idea — tools,
+resources, prompts, and the modular shape a real server takes — is taught with
+that single API. One domain, one set of credentials, one mental model, start to
+finish.
 
 ---
 
 ## Before anything else: how this lab works
 
-**Every step is a complete, standalone program.** There are eight of them:
+**Every step is a complete, standalone program.** There are six of them:
 
 ```
-01_hello_mcp.py       the smallest server that works
-02_whoami.py          the first real Webex call
-03_rooms.py           returning a collection
-04_send_message.py    the first write
-05_resource.py        the second primitive: a resource
-06_prompt.py          the third primitive: a prompt
-07_address_book.py    a second API family: Contact Center
-08_modular/           the same server, built to grow
+01_hello_mcp.py       the smallest server that works (no network, no token)
+02_list_books.py      the first real Contact Center call: list address books
+03_write_books.py     writing: create a book, then add contacts to it
+04_resource.py        the second primitive: a resource
+05_prompt.py          the third primitive: a prompt
+06_modular/           the same server, built to grow
 ```
 
-Each file runs on its own. `03_rooms.py` does not import `02_whoami.py`, and
-none of them import a shared helper module. That means a step never breaks
-because you skipped the one before it.
+Each file runs on its own. `04_resource.py` does not import `02_list_books.py`,
+and none of them import a shared helper module. That means a step never breaks
+because you skipped the one before it — each chapter carries a full copy of the
+tools it has reached so far.
 
 **Arrived late?** Good news: you have missed nothing you cannot recover in two
 minutes. Do the setup chapter below, then open whichever file the room is
 currently on and run it. The earlier steps are still there when you want them,
-and reading them afterwards costs nothing — each is under 150 lines and stands
-completely alone.
+and reading them afterwards costs nothing — each stands completely alone.
 
 The repetition between files is on purpose. Each one is meant to be read from
 top to bottom without following an import anywhere else.
@@ -38,8 +41,15 @@ top to bottom without following an import anywhere else.
 
 ## Setup
 
-You need two things: Python 3.10 or newer, and a Webex access token. Nothing is
-generated, nothing is stored, and there is no sign-in flow to complete.
+You need two things: Python 3.10 or newer, and — from chapter 02 onward — access
+to a Webex **Contact Center** organization. Chapter 01 needs neither a token nor
+a network.
+
+> **Read this before you start.** Every chapter except 01 talks to Webex Contact
+> Center. If you do not have a Contact Center organization and a token with the
+> `cjp:config_read` and `cjp:config_write` scopes, you can still do chapter 01,
+> but 02–06 will refuse to start and tell you which credential is missing. Decide
+> now which path you are on so you are not surprised later.
 
 ### 1. Create and activate a virtual environment
 
@@ -71,25 +81,25 @@ pip install -r requirements.txt
 ```
 
 That installs three packages into `.venv`: `mcp`, `httpx`, and `python-dotenv`.
-The first two do the work. The third loads your token from `.env` at startup —
-the one job `uv` used to do from outside the code, now done in the open.
+The first two do the work. The third loads your credentials from `.env` at
+startup, so no `--env-file` flag is ever needed.
 
-### 3. Get a Webex access token
+### 3. Get your Contact Center credentials
 
-Go to **https://developer.webex.com/docs/getting-started** and sign in. Your
-personal access token is on that page — copy it.
+You need three values:
 
-That token is valid for 12 hours and carries your own Webex permissions. If it
-expires mid-lab, reload the page and copy the new one.
+- **A Webex access token** with the `cjp:config_read` and `cjp:config_write`
+  scopes. Get a personal token from
+  **https://developer.webex.com/docs/getting-started** (valid 12 hours), or
+  create a bot at **https://developer.webex.com/my-apps**. The token must belong
+  to an account with Contact Center configuration access.
+- **Your Contact Center organization id** (`WEBEX_ORG_ID`).
+- **Your Contact Center Config API base URL** (`WXCC_CONFIG_API_BASE`) — the data
+  centre you belong to, e.g. `https://api.wxcc-us1.cisco.com` (or `eu1`, `anz1`, …).
 
-> If you would rather not use your own account, create a bot at
-> **https://developer.webex.com/my-apps** and use its access token instead.
-> A bot only sees spaces you have added it to, which for this lab is a feature:
-> the blast radius is a space you created for the purpose.
+### 4. Put the credentials in a file
 
-### 4. Put the token in a file
-
-Copy the example file and paste your token in:
+Copy the example file and paste your values in:
 
 **Windows (PowerShell)**
 
@@ -105,10 +115,12 @@ cp .env.example .env
 nano .env
 ```
 
-Set the first line and leave the rest for now:
+Fill in all three lines:
 
 ```
 WEBEX_ACCESS_TOKEN=your-token-here
+WEBEX_ORG_ID=your-org-id
+WXCC_CONFIG_API_BASE=https://api.wxcc-us1.cisco.com
 ```
 
 `.env` is listed in `.gitignore`. Do not commit it, and do not paste your token
@@ -123,20 +135,20 @@ python 01_hello_mcp.py
 It prints one line — `webex-mcp-lab-01 running on stdio ...` — and then appears
 to hang. **That is correct.** The banner goes to stderr; the server then waits
 on stdin/stdout for a client to connect, so there is nothing more to print until
-one does. Press `Ctrl+C` to stop it.
+one does. Press `Ctrl+C` to stop it. Chapter 01 needs no credentials, so this
+works even before you have filled in `.env`.
 
 ### What you need for which chapter
 
-| Chapters | What you need |
+| Chapter | What you need |
 |---|---|
-| 01 – 06 | A Webex access token. That is all. |
-| 07 | A Webex **Contact Center** organization, plus a token with the `cjp:config_read` and `cjp:config_write` scopes. |
-| 08 | A token. Contact Center is optional — chapter 08 explains the one line you remove without it. |
+| 01 | Nothing. No token, no network. |
+| 02 – 06 | A Webex **Contact Center** organization, a token with the `cjp:config_read` and `cjp:config_write` scopes, plus `WEBEX_ORG_ID` and `WXCC_CONFIG_API_BASE` in your `.env`. |
 
-**If you do not have a Contact Center organization, you can complete every
-chapter except 07.** You will not be stuck, and chapter 08 is written to work
-either way. Decide now which of the two paths you are on so you are not
-surprised later.
+**If you do not have a Contact Center organization, you can still complete
+chapter 01** and read the rest. Every other chapter needs the credentials above,
+and each one names the missing variable at startup rather than failing later
+with an opaque HTTP error.
 
 ---
 
@@ -169,8 +181,9 @@ the lab folder so the server finds your `.env`. On macOS and Linux the
 interpreter is `.venv/bin/python` instead of `.venv/Scripts/python.exe`.
 
 Replace both paths with your own, and change the script name as you work through
-the chapters. Use forward slashes on every platform, including Windows. No
-environment-file flag is needed — the server loads `.env` itself.
+the chapters (for the modular finale, point `args` at `06_modular/server.py`).
+Use forward slashes on every platform, including Windows. No environment-file
+flag is needed — the server loads `.env` itself.
 
 ![Visual Studio Code showing the webex-mcp-lab server connected, with the greet tool listed in the tool picker](images/00-vscode-connected-vscode.png)
 
@@ -218,25 +231,34 @@ The decorator does three separate jobs, and it is worth separating them:
 > and get `ModuleNotFoundError: No module named 'mcp.server.fastmcp'`, this is
 > why.
 
+Chapter 01 already uses the same dual-sink logging as the rest of the lab — it
+writes to stderr *and* `01_hello_mcp.log`, in the same format, so you can
+review the greet calls after the fact. The full explanation is in chapter 02.
+
 Ask your client: *"greet Diego"*.
 
 ![The assistant calling the greet tool and returning the greeting](images/01-greet-vscode.png)
 
 ---
 
-## Chapter 02 — the first real Webex call
+## Chapter 02 — the first real Webex call: list address books
 
-**File: `02_whoami.py`**
+**File: `02_list_books.py`**
 
-Now the tool talks to Webex.
+Now the tool talks to Webex Contact Center and hands back a real collection: the
+address books configured in your organization.
 
-Two things arrive in this step. The first is the token, read once at startup:
+Two things arrive in this step. The first is the credential check, done once at
+startup and naming any variable that is missing:
 
 ```python
-TOKEN = os.environ.get("WEBEX_ACCESS_TOKEN")
-if not TOKEN:
-    sys.exit("WEBEX_ACCESS_TOKEN is not set. Copy .env.example to .env, add "
-             "your token, and re-run.")
+for _name, _value in (
+    ("WEBEX_ACCESS_TOKEN", TOKEN),
+    ("WEBEX_ORG_ID", ORG_ID),
+    ("WXCC_CONFIG_API_BASE", CONFIG_API_BASE),
+):
+    if not _value:
+        sys.exit(f"{_name} is not set. This lab needs Webex Contact Center - see .env.example.")
 ```
 
 Checking at startup rather than inside the tool is deliberate. A server that
@@ -247,179 +269,187 @@ diagnosed by reading one line.
 The second is the shape of the result:
 
 ```python
-return {
-    "display_name": person.get("displayName"),
-    "email": (person.get("emails") or [None])[0],
-    "type": person.get("type"),
-}
+books = [
+    {"id": book.get("id"), "name": book.get("name"), "description": book.get("description")}
+    for book in response.json().get("items", [])
+]
+return {"count": len(books), "address_books": books}
 ```
 
-Webex returns far more than this. We return three fields because **everything a
-tool returns is read by a language model** — it becomes context the model has
-to process. And the token, obviously, never appears in it.
+Webex wraps collections in an `items` key and each record has many fields. We
+unwrap it and keep three, because **everything a tool returns is read by a
+language model** — it becomes context the model has to process. The `id` is
+there because the next chapter needs it. And the token, obviously, never appears
+in the result.
 
-Ask your client: *"who am I on Webex?"*
+Ask your client: *"list my Contact Center address books"*.
 
-![The assistant calling whoami and reporting the signed-in Webex identity](images/02-whoami-vscode.png)
+![The assistant listing address books returned by the list_address_books tool](images/02-list-books-vscode.png)
 
 ### Watching the server work
 
-Run `02_whoami.py` and call the tool, and you will see more than the banner now:
+Run `02_list_books.py` and call the tool, and you will see more than the banner:
 
 ```
-whoami: GET https://webexapis.com/v1/people/me
-whoami: Webex responded HTTP 200
+2026-08-28 18:20:01,442 DEBUG webex: list_address_books: GET https://api.wxcc-us1.cisco.com/organization/<org>/v3/address-book
+2026-08-28 18:20:01,905 DEBUG webex: list_address_books: Webex responded HTTP 200
 ```
 
-That is the server's own log, and every file from here on keeps one. Four lines
-near the top of each file set it up:
+That is the server's own log, and every chapter from here keeps one. It goes to
+**two places at once**: the live stderr stream *and* a file next to the script
+(`02_list_books.log`, `03_write_books.log`, and so on). A block near the top of
+each file sets both up:
 
 ```python
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 log = logging.getLogger("webex")
 log.setLevel(logging.DEBUG)
 log.propagate = False
-log.addHandler(logging.StreamHandler(sys.stderr))
+for _handler in (
+    logging.StreamHandler(sys.stderr),
+    logging.FileHandler(Path(__file__).with_suffix(".log"), encoding="utf-8"),
+):
+    _handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    log.addHandler(_handler)
 ```
 
-Three properties are worth naming, because they are why this is safe:
+Five properties are worth naming, because they are why this is safe and useful:
 
 - **It goes to stderr, never stdout.** stdout carries the MCP protocol — a stray
   `print` there corrupts it. Logs belong on stderr, which is exactly where an
   MCP host collects them.
-- **It does not depend on the client.** The level is set to `DEBUG` in the code,
-  so you see the same trace whether the server is driven by VS Code, the bot, or
-  the `_check.py` script. Nothing needs to ask for logging.
-- **It never logs a secret.** The token is not logged, and neither is message
-  text (chapter 04) or a contact's number (chapter 07). A log line is a decision
-  about what is safe to write down — make it deliberately.
+- **It is also written to a file, beside the server.** The path comes from
+  `__file__`, so the log lands next to the script no matter which directory the
+  host launched it from. The modular server (chapter 06) writes one
+  `webex-mcp-lab.log`; each numbered chapter writes its own `NN_<name>.log`.
+- **The file appends across runs**, so you can compare today's run against
+  yesterday's. `*.log` is git-ignored, so these never get committed.
+- **It does not depend on the client.** The level is `DEBUG` in the code, so you
+  see the same trace whether the server is driven by VS Code, the bot, or the
+  `_check.py` script. Nothing needs to ask for logging.
+- **It never logs a secret.** The token is not logged, and neither is a contact's
+  phone number (chapter 03). A log line is a decision about what is safe to write
+  down — make it deliberately.
+
+Every chapter uses the same block, including chapter 01 — so even the no-network
+intro produces `01_hello_mcp.log`, and you can review past greet calls there.
 
 As you work through the chapters the log grows with the feature: a request and
-its status in 02–04, a count in 03, the resource read in 05, the prompt firing
-in 06, and every failure through one line in 07. Chapter 08 collapses all of it
-into a single line written once.
+its status in 02–03, the resource read in 04, the prompt firing in 05, and every
+Contact Center failure through one line. Chapter 06 collapses all of it into a
+single request line written once, in the shared client.
 
 ---
 
-## Chapter 03 — returning a collection
+## Chapter 03 — writing: create a book, then fill it
 
-**File: `03_rooms.py`**
+**File: `03_write_books.py`**
 
-One tool, one endpoint, one new idea: the API returns a list, and you decide
-what the model sees.
+Everything so far only read. This chapter writes, and it introduces two ideas
+at once.
 
-```python
-rooms = [
-    {
-        "id": room.get("id"),
-        "title": room.get("title"),
-        "type": room.get("type"),
-        "last_activity": room.get("lastActivity"),
-    }
-    for room in response.json().get("items", [])
-]
-```
-
-A raw Webex room record has around twenty fields. We keep four. The `id` is
-there because the next chapter needs it to send a message somewhere.
-
-Notice also that `limit` has a default:
-
-```python
-async def list_rooms(limit: int = 20) -> dict:
-```
-
-A default makes the argument optional in the generated schema, so the model can
-call this with no arguments at all. Required arguments are a real cost — every
-one is something the model has to work out before it can act.
-
-> If you did last year's bots lab, this endpoint will look familiar. Same call,
-> same token. Last year the rooms were printed for a person to read; this year
-> they are returned for a model to reason about. That is the whole difference.
-
-Ask your client: *"what Webex spaces am I in?"*
-
-![The assistant listing Webex spaces returned by the list_rooms tool](images/03-rooms-vscode.png)
-
----
-
-## Chapter 04 — the first write, and who asks permission
-
-**File: `04_send_message.py`**
-
-Everything so far only read. This chapter posts a message.
+### Who asks permission
 
 ```python
 @mcp.tool()
-async def send_message(room_id: str, text: str) -> dict:
+async def create_address_book(name: str, description: str = "") -> dict:
 ```
 
-Now look at what is **not** in that function. There is no `confirm` argument.
-There is no dry-run mode. There is no preview step, and the server never stops
-to ask you whether you meant it. It posts the message.
+Look at what is **not** in that function. There is no `confirm` argument. There
+is no dry-run mode, and the server never stops to ask whether you meant it. It
+creates the book.
 
 That is not an oversight, and it is the most important idea in this lab.
 
-**Consent belongs to the host, not to the server.** Before `send_message` is
-entered, your MCP client shows you the tool name and both arguments and waits
+**Consent belongs to the host, not to the server.** Before `create_address_book`
+is entered, your MCP client shows you the tool name and its arguments and waits
 for you to approve. Every MCP host does this. It is part of the protocol's
 design, not a feature of any particular server.
 
-![The Visual Studio Code approval prompt showing the send_message tool with its room_id and text arguments, waiting for the user to allow or deny](images/04-approval-vscode.png)
+![The Visual Studio Code approval prompt showing the create_address_book tool with its arguments, waiting for the user to allow or deny](images/03-approval-vscode.png)
 
-So a server that builds its own approval step is not adding safety. It is
-adding a second dialog in front of the first one, and teaching its users that
-clicking through dialogs is normal. The host already asked. Trust it, and keep
-your tool honest about what it does.
+So a server that builds its own approval step is not adding safety. It is adding
+a second dialog in front of the first one, and teaching its users that clicking
+through dialogs is normal. The host already asked. Trust it, and keep your tool
+honest about what it does.
 
-What a server *should* do about dangerous operations is a different question,
-and the answer is usually "not offer them." You will see that in chapter 07.
+**There are also no delete tools in this file** — not because deleting is hard,
+but because address books are shared configuration on a shared organization. A
+mistaken create leaves a stray book for an administrator to remove; a mistaken
+delete removes a book and every contact in it. Those are not comparable, so the
+verb is simply absent. Deciding which operations a tool exposes *at all* is a
+more effective control than any confirmation flow.
 
-Ask your client: *"post 'hello from my MCP server' to the Lab space"* — and
-watch for the approval prompt before anything is sent.
+### Chaining calls
 
-![The message delivered in a Webex space, posted by the assistant through the send_message tool](images/04-delivered-webexbot.png)
+`create_address_book` returns the new book's id; `add_entry` takes that id as
+its first argument:
+
+```python
+return {"created": True, "address_book_id": book.get("id"), "name": book.get("name")}
+```
+
+```python
+async def add_entry(address_book_id: str, name: str, number: str) -> dict:
+```
+
+Watch the model carry the id from the first call into the second. That is most
+of what "using tools together" means, and it is why the create result puts the
+id front and centre.
+
+The other thing worth copying is the failure handling — every branch of `_fail`
+returns a sentence, not an exception, so one bad call never takes the server
+down and the model can relay the reason to you.
+
+Ask your client: *"create an address book called Lab Contacts, then add Acme
+Reception on +14155550101"* — and watch for the approval prompt before anything
+is written.
+
+![The assistant creating an address book and adding a contact through the Contact Center tools](images/03-write-books-vscode.png)
 
 ---
 
-## Chapter 05 — the second primitive: a resource
+## Chapter 04 — the second primitive: a resource
 
-**File: `05_resource.py`**
+**File: `04_resource.py`**
 
 MCP has three primitives. You have been using one of them.
 
 ```python
-@mcp.resource("webex://guidelines/posting")
-def posting_guidelines() -> str:
-    """House style for messages posted by an assistant."""
+@mcp.resource("webex://address-books/conventions")
+def address_book_conventions() -> str:
+    """House style for address books in this organization."""
 ```
 
-A **tool** is an action the *model* decides to take. A **resource** is
-reference material the *client* attaches to the conversation, the way you would
-attach a file. Reading a resource changes nothing — that is exactly why a
-client can pull one in without asking you first.
+A **tool** is an action the *model* decides to take. A **resource** is reference
+material the *client* attaches to the conversation, the way you would attach a
+file. Reading a resource changes nothing — that is exactly why a client can pull
+one in without asking you first.
 
-The resource here is a house style for messages, and it exists to shape how
-`send_message` gets used. That is the useful pattern: a resource is context
-that makes your tools behave better.
+The resource here is the house style for address books: name a book for its
+team, store numbers in E.164, check for a duplicate before creating one. It
+exists to shape how `create_address_book` and `add_entry` get used — the write
+tools' docstrings point straight at it. That is the useful pattern: a resource
+is context that makes your tools behave better.
 
 The URI is how a client refers to it. The scheme is yours to choose — `webex://`
 here — and it need not correspond to anything on a network.
 
-![The resource picker in Visual Studio Code showing the posting guidelines resource offered by the server](images/05-resource-vscode.png)
+![The resource picker in Visual Studio Code showing the address book conventions resource offered by the server](images/04-resource-vscode.png)
 
 ---
 
-## Chapter 06 — the third primitive: a prompt
+## Chapter 05 — the third primitive: a prompt
 
-**File: `06_prompt.py`**
+**File: `05_prompt.py`**
 
 ```python
 @mcp.prompt()
-def post_status_update(space: str = "", topic: str = "") -> str:
+def set_up_address_book(book_name: str = "", team: str = "") -> str:
 ```
 
-Now all three are in one file, and the difference between them is *who reaches
-for them*:
+Now all three primitives are in one file, and the difference between them is
+*who reaches for them*:
 
 | Primitive | Who invokes it | What it is |
 |---|---|---|
@@ -433,105 +463,66 @@ of a conversation:
 
 ```python
 return (
-    f"Post a status update about {topic} to the {space} space.\n"
+    f"Set up an address book called {book_name} for the {team} team.\n"
     "\n"
-    "1. Read the webex://guidelines/posting resource and follow it.\n"
-    "2. Call list_rooms to find the space and get its id.\n"
-    "3. Show me the draft and the space you picked before sending.\n"
-    "4. Once I approve, call send_message."
+    "1. Read the webex://address-books/conventions resource and follow it.\n"
+    "2. Call list_address_books first - reuse a matching book, do not duplicate.\n"
+    "3. Otherwise call create_address_book and keep the id it returns.\n"
+    "4. Ask me for the contacts (name and E.164 number each).\n"
+    "5. Show me the list and, once I approve, call add_entry for each."
 )
 ```
 
-Read that again as what it is: a workflow, written by the person who knows how
-the job should be done, packaged so a user can trigger it without knowing any
-of it. The arguments become fields the client asks the user to fill in.
+Read that as what it is: a workflow, written by the person who knows how the job
+should be done, packaged so a user can trigger it without knowing any of the
+steps. It orchestrates the tools *and* the resource from the two chapters
+before it — the whole address-book surface, behind one menu item. The arguments
+become fields the client asks the user to fill in.
 
-![The prompt appearing as a slash command in the client, with fields for space and topic](images/06-prompt-vscode.png)
-
----
-
-## Chapter 07 — a second API family: Webex Contact Center
-
-**File: `07_address_book.py`**
-
-> **This chapter needs a Webex Contact Center organization** and a token with
-> the `cjp:config_read` and `cjp:config_write` scopes, plus `WEBEX_ORG_ID` and
-> `WEBEX_CC_API_BASE` in your `.env`. If you do not have one, skip to
-> chapter 08 — nothing there depends on this.
-
-Here is the point of this chapter: **nothing about MCP changes.** The
-decorators are the same, the result shapes are the same, the consent model is
-the same. Only the URLs and the host differ. Once you can wrap one API, you can
-wrap any API — which is the actual reason to learn this.
-
-What does change is the amount of care the domain deserves.
-
-**There are no delete tools in this file.** Not because deleting is hard — it is
-the same decorated function as everything else — but because address books are
-shared configuration on a shared organization, and the only thing standing in
-front of a destructive call is an approval dialog that people click through. A
-mistaken create leaves a stray address book for an administrator to remove. A
-mistaken delete removes a book and every contact in it. Those are not
-comparable, so the verb is simply absent.
-
-Deciding which operations a tool exposes *at all* is a design decision, and it
-is a more effective control than any confirmation flow.
-
-The other thing worth copying is the failure handling:
-
-```python
-if response.status_code == 403:
-    return {"error": "The token lacks Contact Center config permission (cjp:config_write)."}
-```
-
-The tool returns a sentence, not an exception. The model can relay it to you,
-and the server stays up for the next call.
-
-Ask your client: *"create an address book called Lab Contacts, then add Acme
-Reception on +14155550101"*.
-
-![The assistant creating an address book and adding a contact through the Contact Center tools](images/07-address-book-vscode.png)
+![The prompt appearing as a slash command in the client, with fields for book name and team](images/05-prompt-vscode.png)
 
 ---
 
-## Chapter 08 — the same server, built to grow
+## Chapter 06 — the same server, built to grow
 
-**Directory: `08_modular/`**
+**Directory: `06_modular/`**
 
 Every chapter so far put everything in one file. That is the right shape for
 reading and the wrong shape for a server you keep. This chapter is the same
 functionality in the shape you would actually maintain.
 
 ```
-08_modular/
-    server.py           decides which domains are switched on
-    webex_client.py     credentials and HTTP, resolved once
+06_modular/
+    server.py            decides which domains are switched on
+    webex_client.py      credentials and HTTP, resolved once
     tools/
-        __init__.py     the contract, written down
-        messaging.py    spaces and messages
-        address_books.py Contact Center configuration
+        __init__.py      the contract, written down
+        address_books.py the whole lab: four tools, a resource, and a prompt
+        _template.py     a starting point for a second API family
 ```
 
 Three kinds of file, and no more.
+
+### One domain, every primitive
+
+`tools/address_books.py` is a single domain module that registers **all three
+primitives** — four tools, the conventions resource, and the set-up prompt. It
+is the modular form of chapters 02–05, and it shows the pattern you would follow
+for any subject area: one file owns one domain, top to bottom.
 
 ### The whole extension mechanism
 
 ```python
 DOMAINS = [
-    messaging,
     address_books,
 ]
 ```
 
 That is it. **To add a subject area:** write `tools/your_domain.py` with a
 `register(mcp, client)` function and add it to that list. **To switch one off:**
-delete its line.
-
-> **No Contact Center organization?** Remove `address_books` from `DOMAINS`.
-> The server starts and everything else works exactly as before.
-
-Registration is an explicit list rather than a directory scan, so you can read
-those four lines and know precisely what the server exposes. So can a reviewer.
+delete its line. Registration is an explicit list rather than a directory scan,
+so you can read those lines and know precisely what the server exposes. So can a
+reviewer.
 
 ### The contract, in full
 
@@ -553,56 +544,35 @@ domains independent:
 Follow those and a new domain cannot break an existing one, because it cannot
 reach it.
 
-Here is a complete domain module — this is the whole file:
-
-```python
-"""Weather domain."""
-
-
-def register(mcp, client) -> None:
-    @mcp.tool()
-    async def forecast(city: str) -> dict:
-        """Return the forecast for a city."""
-        return {"city": city, "outlook": "sunny"}
-```
-
-Add `weather` to `DOMAINS`, restart, and its tool appears alongside the others.
-No existing file changes.
-
 ### Why credentials live in one place
 
-`webex_client.py` is the only file that reads environment variables and the
-only file that holds the token. Domain modules get a `WebexClient` and never
-see the credential:
+`webex_client.py` is the only file that reads environment variables and the only
+file that holds the token. Domain modules get a `WebexClient` and never see the
+credential:
 
 ```python
-self._token = env.get("WEBEX_ACCESS_TOKEN")
+self._token = self._settings.pop("WEBEX_ACCESS_TOKEN", None)
 ```
 
-That single underscore is doing real work. Because no domain module can reach
-the token, no tool schema, tool result, or log line in this server can leak it —
-and that is a property you can check by reading one file rather than auditing
-every domain.
-
-The client reads every `WEBEX_`-prefixed variable and knows what none of them
-are for. Domains that need more than the base token say so at registration
-time, in their own words:
+Because no domain module can reach the token, no tool schema, tool result, or
+log line in this server can leak it — a property you can check by reading one
+file rather than auditing every domain. The address book domain asks for its
+extra credentials at registration time, in its own words:
 
 ```python
 settings = client.require(
-    "WEBEX_ORG_ID", "WEBEX_CC_API_BASE", needed_by="the address book domain"
+    "WEBEX_ORG_ID", "WXCC_CONFIG_API_BASE", needed_by="the address book domain"
 )
 ```
 
-which means a misconfiguration is reported once, at startup, naming both the
-missing variable and the domain that wanted it — rather than once per tool
-call, as a 403.
+so a misconfiguration is reported once, at startup, naming both the missing
+variable and the domain that wanted it — rather than once per tool call, as a
+403.
 
 ### One log line for every domain
 
-The same centralisation applies to the log. In chapters 02–07 each tool wrote
-its own DEBUG lines; here that moves into `webex_client.request`, which every
-domain already calls:
+In chapters 02–05 each tool wrote its own DEBUG lines; here that moves into
+`webex_client.request`, which every domain already calls:
 
 ```python
 log.debug("-> %s %s", method, url)
@@ -613,18 +583,18 @@ log.debug("<- HTTP %s (%s %s)", response.status_code, method, url)
 Write it once and every domain is traced — including one you add tomorrow from
 the template, which needs no logging code of its own. The logger is configured
 once in `webex_client.py` and shared by name (`logging.getLogger("webex")`), so
-`server.py` and each domain reach the same stderr log with no setup. And because
-the token lives only in `WebexClient`, the request log physically cannot contain
-it.
+`server.py` and each domain reach the same two sinks — stderr and one
+`webex-mcp-lab.log` beside the server — with no setup. And because the token
+lives only in `WebexClient`, the request log physically cannot contain it.
 
-![The modular server connected, showing tools from both domains in one list](images/08-modular-vscode.png)
+![The modular server connected, showing the address book tools, resource, and prompt in one list](images/06-modular-vscode.png)
 
 ---
 
 ## Add your own Webex API family
 
-Chapter 08 gave you the mechanism. Here is the recipe. There is a starting point
-in the tree for exactly this: `08_modular/tools/_template.py`. It is a complete
+Chapter 06 gave you the mechanism. Here is the recipe. There is a starting point
+in the tree for exactly this: `06_modular/tools/_template.py`. It is a complete
 domain module that does nothing yet — it is not in `DOMAINS`, and its one tool
 returns placeholder data over no network — so copying it is safe and changes
 nothing until you wire it in.
@@ -637,29 +607,20 @@ Five steps:
    docstring is how the model decides whether to call it, so make it specific.
 3. **Point it at an endpoint.** Replace the placeholder body with a
    `client.request(...)` call. **This is the one place the API family is
-   chosen** — Webex Calling, Meetings, and Contact Center are all just a
-   different URL here; the contract around it does not change.
+   chosen** — Webex Calling, Meetings, and other Contact Center APIs are all
+   just a different URL here; the contract around it does not change.
 4. **Register it.** Add your module to the `DOMAINS` list in `server.py` — one
-   line, exactly as `messaging` and `address_books` are already listed.
+   line, exactly as `address_books` is already listed.
 5. **Restart.** Your new tool appears alongside the others.
-
-Which API you wrap is the only real decision, and it lives entirely in step 3:
-
-| Target | Where its calls go |
-|---|---|
-| Webex Calling | the Calling APIs under `https://webexapis.com/v1` |
-| Webex Meetings | the Meetings APIs under `https://webexapis.com/v1` |
-| Contact Center | a Contact Center base URL — copy the org/base pattern from `address_books.py` |
 
 Two notes so you are not surprised:
 
-- **Nothing new to install or configure.** The recipe adds no dependency and no
-  new environment variable beyond what chapter 08 already documents. A domain
-  that needs extra credentials asks for them at registration time with
+- **Nothing new to install or configure.** The recipe adds no dependency. A
+  domain that needs extra credentials asks for them at registration time with
   `client.require(...)` — copy that shape from `address_books.py`.
 - **The template tool is read-only on purpose.** For a write, copy the
-  `send_message` or `create_address_book` shape instead; for extra configuration,
-  copy the `client.require(...)` line. Both live in files you already have.
+  `create_address_book` or `add_entry` shape instead; for extra configuration,
+  copy the `client.require(...)` line. Both live in `address_books.py`.
 
 ---
 
@@ -667,8 +628,8 @@ Two notes so you are not surprised:
 
 You now have a server you can extend. The obvious next moves:
 
-- **Add a domain.** Meetings, teams, memberships, webhooks — the Webex API is
-  large and the contract is four lines.
+- **Add a domain.** Contact Center has far more than address books — queues,
+  teams, users, skills — and the contract is the same four lines.
 - **Read your tool descriptions as the model does.** They are the interface.
   Most tools that behave badly are described badly.
 - **Watch what you return.** Every field is context. Trim.
@@ -685,12 +646,12 @@ paths so the guide renders offline.
 Filenames follow `NN-<slug>-<client>.png`:
 
 - `NN` — the chapter number the image belongs to, `00` for setup chapters
-- `<slug>` — what the image shows, in words (`approval`, `rooms`, `modular`)
+- `<slug>` — what the image shows, in words (`approval`, `list-books`, `modular`)
 - `<client>` — the host it was captured in: `vscode` or `webexbot`
 
 Every image needs alternative text describing what is on screen, not just
-naming it. `![The Visual Studio Code approval prompt showing the send_message
-tool with its arguments](...)` — not `![screenshot](...)`.
+naming it. `![The Visual Studio Code approval prompt showing the
+create_address_book tool with its arguments](...)` — not `![screenshot](...)`.
 
 Before committing an image, check that no access token, client secret, or
 organization identifier is legible anywhere in the frame, including window

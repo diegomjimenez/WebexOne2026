@@ -1,30 +1,57 @@
-"""Address book domain - Webex Contact Center configuration, from step 07.
+"""Address book domain - the whole lab, in the shape a server keeps.
 
-Needs more than the base token: a Contact Center organization, and a token
-carrying cjp:config_read and cjp:config_write. If you do not have one, remove
-this module from the DOMAINS list in server.py and everything else still runs.
+This one module registers all three MCP primitives for Contact Center address
+books: four tools, one resource, and one prompt. It is the modular form of
+chapters 02-05.
+
+Needs a Contact Center organization and a token carrying cjp:config_read and
+cjp:config_write. It asks for its extra credentials at registration time, so a
+misconfiguration is reported once at startup, not once per tool call.
 
 No delete tools. Address books are shared configuration, so the destructive
 verbs are left out on purpose.
 """
 
-import sys
-
 from webex_client import failure
 
 
 def register(mcp, client) -> None:
-    """Add this domain's tools to the server."""
+    """Add this domain's tools, resource, and prompt to the server."""
 
-    # Asking for the extra credentials here means a misconfiguration is
-    # reported once, at startup, instead of once per tool call.
+    # Asking for the extra credentials here means a misconfiguration is reported
+    # once, at startup, naming both the missing variable and this domain.
     settings = client.require(
-        "WEBEX_ORG_ID", "WEBEX_CC_API_BASE", needed_by="the address book domain"
+        "WEBEX_ORG_ID", "WXCC_CONFIG_API_BASE", needed_by="the address book domain"
     )
-    base = settings["WEBEX_CC_API_BASE"].rstrip("/")
-    if "REGION" in base:
-        sys.exit("WEBEX_CC_API_BASE still says REGION. Replace it with your data centre.")
+    base = settings["WXCC_CONFIG_API_BASE"].rstrip("/")
     org = f"{base}/organization/{settings['WEBEX_ORG_ID']}"
+
+    @mcp.resource("webex://address-books/conventions")
+    def address_book_conventions() -> str:
+        """House style for address books in this organization."""
+        return (
+            "# Address book conventions\n"
+            "\n"
+            "- Name a book for its team or purpose, e.g. 'Sales - EMEA', not 'Book1'.\n"
+            "- Before creating a book, list existing books and reuse one if it fits.\n"
+            "- Store numbers in E.164 format: a leading +, country code, no spaces,\n"
+            "  e.g. +14155550101.\n"
+            "- Give every entry a human name; never add a bare number.\n"
+        )
+
+    @mcp.prompt()
+    def set_up_address_book(book_name: str = "", team: str = "") -> str:
+        """Set up an address book end to end: create it and add its first contacts."""
+        return (
+            f"Set up an address book called {book_name or '<book name>'} for the "
+            f"{team or '<team>'} team.\n"
+            "\n"
+            "1. Read the webex://address-books/conventions resource and follow it.\n"
+            "2. Call list_address_books first - reuse a matching book, do not duplicate.\n"
+            "3. Otherwise call create_address_book and keep the id it returns.\n"
+            "4. Ask me for the contacts (name and E.164 number each).\n"
+            "5. Show me the list and, once I approve, call add_entry for each."
+        )
 
     @mcp.tool()
     async def list_address_books(limit: int = 50) -> dict:
@@ -43,7 +70,10 @@ def register(mcp, client) -> None:
 
     @mcp.tool()
     async def create_address_book(name: str, description: str = "") -> dict:
-        """Create a new address book. Your MCP client asks for approval first."""
+        """Create a new address book. Returns its id, which add_entry then needs.
+
+        Your MCP client asks for approval first.
+        """
         response = await client.request(
             "POST",
             f"{org}/v3/address-book",
@@ -62,7 +92,7 @@ def register(mcp, client) -> None:
         if search:
             params["search"] = search
 
-        # Listing entries is the one operation on v2; creating is still v1.
+        # Listing entries is the one operation on v2; the others below vary too.
         response = await client.request(
             "GET", f"{org}/v2/address-book/{address_book_id}/entry", params=params
         )

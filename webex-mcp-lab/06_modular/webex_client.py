@@ -9,6 +9,7 @@ this server can leak it.
 import logging
 import os
 import sys
+from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
@@ -17,18 +18,23 @@ from dotenv import load_dotenv
 # loads .env - no --env-file flag needed, however the server is launched.
 load_dotenv()
 
-WEBEX_API = "https://webexapis.com/v1"
-
 # Logging is configured once, here, and shared by name. Every domain module
 # calls logging.getLogger("webex") and gets this same logger - so the request
 # log below covers all of them, and a new domain is traced the moment it makes
-# its first call, with no logging code of its own. It goes to stderr (stdout
-# carries the MCP protocol), is independent of the client, and never sees the
-# token, which is private to WebexClient.
+# its first call, with no logging code of its own. Two sinks: stderr (stdout
+# carries the MCP protocol) and one file for the whole server, next to this
+# source. The file is named for the server, webex-mcp-lab.log, not for this
+# client. Neither sink ever sees the token, which is private to WebexClient.
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 log = logging.getLogger("webex")
 log.setLevel(logging.DEBUG)
 log.propagate = False
-log.addHandler(logging.StreamHandler(sys.stderr))
+for _handler in (
+    logging.StreamHandler(sys.stderr),
+    logging.FileHandler(Path(__file__).parent / "webex-mcp-lab.log", encoding="utf-8"),
+):
+    _handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    log.addHandler(_handler)
 
 
 class WebexClient:
@@ -37,9 +43,12 @@ class WebexClient:
     def __init__(self, env: dict | None = None) -> None:
         env = env if env is not None else os.environ
 
-        # Every WEBEX_-prefixed variable, read once. This class knows nothing
-        # about what any particular domain needs - domains ask, using require().
-        self._settings = {k: v for k, v in env.items() if k.startswith("WEBEX_") and v}
+        # Every credential this lab uses, read once. The token is private; the
+        # rest (org id, Contact Center base) are handed out by require(). This
+        # class knows nothing about what any particular domain needs.
+        self._settings = {
+            k: v for k, v in env.items() if k.startswith(("WEBEX_", "WXCC_")) and v
+        }
 
         # The token is private. Nothing outside this class can read it.
         self._token = self._settings.pop("WEBEX_ACCESS_TOKEN", None)
@@ -83,7 +92,7 @@ def failure(response: httpx.Response) -> dict:
         return {
             "error": (
                 "Webex refused this request. The token is expired, or it lacks the "
-                "permission this operation needs."
+                "Contact Center config permission (cjp:config_write) this operation needs."
             )
         }
     if response.status_code == 404:
