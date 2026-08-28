@@ -22,12 +22,20 @@ Run it:
     python 07_address_book.py
 """
 
+import logging
 import os
 import sys
 
 import httpx
 from dotenv import load_dotenv
 from mcp.server import MCPServer
+
+# Server-side logging -> stderr (never stdout, which carries the MCP protocol),
+# independent of the client, DEBUG by default. The token is never logged.
+log = logging.getLogger("webex")
+log.setLevel(logging.DEBUG)
+log.propagate = False
+log.addHandler(logging.StreamHandler(sys.stderr))
 
 # Load .env so the credentials are present however this script is launched -
 # from a terminal or by an MCP client - with no --env-file flag needed.
@@ -59,6 +67,10 @@ mcp = MCPServer("webex-mcp-lab-07")
 
 def _fail(response: httpx.Response) -> dict:
     """Turn an HTTP failure into a sentence the model can pass on to the user."""
+    # One place every failure passes through, so one log line covers them all.
+    # This is where the log earns its keep - a 403 in the terminal tells you
+    # it is a scope problem long before you read the returned sentence.
+    log.debug("Contact Center request failed: HTTP %s", response.status_code)
     if response.status_code == 401:
         return {"error": "Webex rejected the token. Check that it has not expired."}
     if response.status_code == 403:
@@ -73,10 +85,12 @@ def _fail(response: httpx.Response) -> dict:
 @mcp.tool()
 async def list_address_books(limit: int = 50) -> dict:
     """List the address books configured in this Contact Center organization."""
+    log.debug("list_address_books: GET %s/v3/address-book", ORG)
     async with httpx.AsyncClient(timeout=15) as http:
         response = await http.get(
             f"{ORG}/v3/address-book", headers=HEADERS, params={"pageSize": limit}
         )
+    log.debug("list_address_books: Webex responded HTTP %s", response.status_code)
 
     if response.status_code != 200:
         return _fail(response)
@@ -94,12 +108,14 @@ async def create_address_book(name: str, description: str = "") -> dict:
 
     Your MCP client asks for approval before this runs.
     """
+    log.debug("create_address_book: POST %s/v3/address-book (name=%r)", ORG, name)
     async with httpx.AsyncClient(timeout=15) as http:
         response = await http.post(
             f"{ORG}/v3/address-book",
             headers=HEADERS,
             json={"name": name, "description": description, "parentType": "ORGANIZATION"},
         )
+    log.debug("create_address_book: Webex responded HTTP %s", response.status_code)
 
     if response.status_code not in (200, 201):
         return _fail(response)
@@ -116,10 +132,12 @@ async def list_entries(address_book_id: str, search: str = "") -> dict:
         params["search"] = search
 
     # Listing entries is the one operation on v2; the others below are v1.
+    log.debug("list_entries: GET %s/v2/address-book/%s/entry", ORG, address_book_id)
     async with httpx.AsyncClient(timeout=15) as http:
         response = await http.get(
             f"{ORG}/v2/address-book/{address_book_id}/entry", headers=HEADERS, params=params
         )
+    log.debug("list_entries: Webex responded HTTP %s", response.status_code)
 
     if response.status_code != 200:
         return _fail(response)
@@ -137,12 +155,16 @@ async def add_entry(address_book_id: str, name: str, number: str) -> dict:
 
     Your MCP client asks for approval before this runs.
     """
+    # Log that an entry is being added and to which book; the contact's name
+    # and number are not logged - the same restraint as the message body in 04.
+    log.debug("add_entry: POST %s/address-book/%s/entry", ORG, address_book_id)
     async with httpx.AsyncClient(timeout=15) as http:
         response = await http.post(
             f"{ORG}/address-book/{address_book_id}/entry",
             headers=HEADERS,
             json={"name": name, "number": number},
         )
+    log.debug("add_entry: Webex responded HTTP %s", response.status_code)
 
     if response.status_code not in (200, 201):
         return _fail(response)

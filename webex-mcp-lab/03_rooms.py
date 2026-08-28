@@ -6,6 +6,7 @@ Run it:
     python 03_rooms.py
 """
 
+import logging
 import os
 import sys
 
@@ -14,6 +15,13 @@ from dotenv import load_dotenv
 from mcp.server import MCPServer
 
 WEBEX_API = "https://webexapis.com/v1"
+
+# Server-side logging -> stderr (never stdout, which carries the MCP protocol),
+# independent of the client, DEBUG by default. The token is never logged.
+log = logging.getLogger("webex")
+log.setLevel(logging.DEBUG)
+log.propagate = False
+log.addHandler(logging.StreamHandler(sys.stderr))
 
 # Load .env so the token is present however this script is launched - from a
 # terminal or by an MCP client - with no --env-file flag needed.
@@ -36,12 +44,14 @@ async def list_rooms(limit: int = 20) -> dict:
     `limit` has a default, which makes it optional in the tool's schema - the
     model can call this with no arguments at all.
     """
+    log.debug("list_rooms: GET %s/rooms (max=%s)", WEBEX_API, limit)
     async with httpx.AsyncClient(timeout=10) as http:
         response = await http.get(
             f"{WEBEX_API}/rooms",
             headers={"Authorization": f"Bearer {TOKEN}"},
             params={"max": limit, "sortBy": "lastactivity"},
         )
+    log.debug("list_rooms: Webex responded HTTP %s", response.status_code)
 
     if response.status_code != 200:
         return {"error": f"Webex returned HTTP {response.status_code}."}
@@ -58,6 +68,9 @@ async def list_rooms(limit: int = 20) -> dict:
         }
         for room in response.json().get("items", [])
     ]
+    # Logging a count, not the rooms themselves: enough to see the shape of
+    # what happened without copying a payload into the log.
+    log.debug("list_rooms: returning %d room(s)", len(rooms))
     return {"count": len(rooms), "rooms": rooms}
 
 

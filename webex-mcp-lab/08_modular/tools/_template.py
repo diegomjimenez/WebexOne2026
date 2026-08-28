@@ -40,6 +40,10 @@ def register(mcp, client) -> None:
         # Point `client.request` at Webex Calling, Meetings, or Contact Center -
         # the contract does not change, only the URL and the fields you keep. For
         # a write tool or extra credentials, copy the shapes in address_books.py.
+        #
+        # You do not add any logging here: client.request already writes a DEBUG
+        # line for the request and the response, so this domain is traced the
+        # moment it makes its first real call.
         # -----------------------------------------------------------------------
         return {
             "placeholder": True,

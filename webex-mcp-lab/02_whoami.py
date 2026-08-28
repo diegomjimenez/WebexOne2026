@@ -7,6 +7,7 @@ Run it:
     python 02_whoami.py
 """
 
+import logging
 import os
 import sys
 
@@ -15,6 +16,13 @@ from dotenv import load_dotenv
 from mcp.server import MCPServer
 
 WEBEX_API = "https://webexapis.com/v1"
+
+# Server-side logging -> stderr (never stdout, which carries the MCP protocol),
+# independent of the client, DEBUG by default. The token is never logged.
+log = logging.getLogger("webex")
+log.setLevel(logging.DEBUG)
+log.propagate = False
+log.addHandler(logging.StreamHandler(sys.stderr))
 
 # Load .env so the token is present however this script is launched - from a
 # terminal or by an MCP client - with no --env-file flag needed.
@@ -33,11 +41,15 @@ mcp = MCPServer("webex-mcp-lab-02")
 @mcp.tool()
 async def whoami() -> dict:
     """Return the Webex identity that this server's token belongs to."""
+    # Now that a real HTTP call is involved, the log earns its keep: you can
+    # see the request leave and the status come back, without a debugger.
+    log.debug("whoami: GET %s/people/me", WEBEX_API)
     async with httpx.AsyncClient(timeout=10) as http:
         response = await http.get(
             f"{WEBEX_API}/people/me",
             headers={"Authorization": f"Bearer {TOKEN}"},
         )
+    log.debug("whoami: Webex responded HTTP %s", response.status_code)
 
     if response.status_code != 200:
         # Hand the model a sentence, not a stack trace. It can relay this to

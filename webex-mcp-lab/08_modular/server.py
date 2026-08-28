@@ -20,12 +20,17 @@ Run it:
     python 08_modular/server.py
 """
 
+import logging
 import sys
 
 from mcp.server import MCPServer
 
 from tools import address_books, messaging
 from webex_client import WebexClient
+
+# The "webex" logger is configured once in webex_client, imported above. Here
+# we only ask for it by name - same logger, same stderr handler, no setup.
+log = logging.getLogger("webex")
 
 # Registration is an explicit list, not a directory scan. You can read this and
 # know precisely what the server exposes - and so can a reviewer.
@@ -41,6 +46,7 @@ def main() -> None:
     mcp = MCPServer("webex-mcp-lab")
 
     for domain in DOMAINS:
+        log.debug("registering domain: %s", domain.__name__)
         domain.register(mcp, client)
 
     # A one-line banner to stderr so the terminal shows the server is alive.

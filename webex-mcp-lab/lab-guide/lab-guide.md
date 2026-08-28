@@ -262,6 +262,42 @@ Ask your client: *"who am I on Webex?"*
 
 ![The assistant calling whoami and reporting the signed-in Webex identity](images/02-whoami-vscode.png)
 
+### Watching the server work
+
+Run `02_whoami.py` and call the tool, and you will see more than the banner now:
+
+```
+whoami: GET https://webexapis.com/v1/people/me
+whoami: Webex responded HTTP 200
+```
+
+That is the server's own log, and every file from here on keeps one. Four lines
+near the top of each file set it up:
+
+```python
+log = logging.getLogger("webex")
+log.setLevel(logging.DEBUG)
+log.propagate = False
+log.addHandler(logging.StreamHandler(sys.stderr))
+```
+
+Three properties are worth naming, because they are why this is safe:
+
+- **It goes to stderr, never stdout.** stdout carries the MCP protocol — a stray
+  `print` there corrupts it. Logs belong on stderr, which is exactly where an
+  MCP host collects them.
+- **It does not depend on the client.** The level is set to `DEBUG` in the code,
+  so you see the same trace whether the server is driven by VS Code, the bot, or
+  the `_check.py` script. Nothing needs to ask for logging.
+- **It never logs a secret.** The token is not logged, and neither is message
+  text (chapter 04) or a contact's number (chapter 07). A log line is a decision
+  about what is safe to write down — make it deliberately.
+
+As you work through the chapters the log grows with the feature: a request and
+its status in 02–04, a count in 03, the resource read in 05, the prompt firing
+in 06, and every failure through one line in 07. Chapter 08 collapses all of it
+into a single line written once.
+
 ---
 
 ## Chapter 03 — returning a collection
@@ -561,6 +597,25 @@ settings = client.require(
 which means a misconfiguration is reported once, at startup, naming both the
 missing variable and the domain that wanted it — rather than once per tool
 call, as a 403.
+
+### One log line for every domain
+
+The same centralisation applies to the log. In chapters 02–07 each tool wrote
+its own DEBUG lines; here that moves into `webex_client.request`, which every
+domain already calls:
+
+```python
+log.debug("-> %s %s", method, url)
+...
+log.debug("<- HTTP %s (%s %s)", response.status_code, method, url)
+```
+
+Write it once and every domain is traced — including one you add tomorrow from
+the template, which needs no logging code of its own. The logger is configured
+once in `webex_client.py` and shared by name (`logging.getLogger("webex")`), so
+`server.py` and each domain reach the same stderr log with no setup. And because
+the token lives only in `WebexClient`, the request log physically cannot contain
+it.
 
 ![The modular server connected, showing tools from both domains in one list](images/08-modular-vscode.png)
 

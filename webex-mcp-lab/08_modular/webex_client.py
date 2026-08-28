@@ -6,6 +6,7 @@ credential itself - which is why no tool schema, tool result, or log line in
 this server can leak it.
 """
 
+import logging
 import os
 import sys
 
@@ -17,6 +18,17 @@ from dotenv import load_dotenv
 load_dotenv()
 
 WEBEX_API = "https://webexapis.com/v1"
+
+# Logging is configured once, here, and shared by name. Every domain module
+# calls logging.getLogger("webex") and gets this same logger - so the request
+# log below covers all of them, and a new domain is traced the moment it makes
+# its first call, with no logging code of its own. It goes to stderr (stdout
+# carries the MCP protocol), is independent of the client, and never sees the
+# token, which is private to WebexClient.
+log = logging.getLogger("webex")
+log.setLevel(logging.DEBUG)
+log.propagate = False
+log.addHandler(logging.StreamHandler(sys.stderr))
 
 
 class WebexClient:
@@ -52,8 +64,13 @@ class WebexClient:
     async def request(self, method: str, url: str, **kwargs) -> httpx.Response:
         """Issue an authenticated request. The caller inspects the response."""
         headers = {"Authorization": f"Bearer {self._token}"}
+        # The one log line that traces every domain. Method and URL only - the
+        # Authorization header, and so the token, are never in it.
+        log.debug("-> %s %s", method, url)
         async with httpx.AsyncClient(timeout=15) as http:
-            return await http.request(method, url, headers=headers, **kwargs)
+            response = await http.request(method, url, headers=headers, **kwargs)
+        log.debug("<- HTTP %s (%s %s)", response.status_code, method, url)
+        return response
 
 
 def failure(response: httpx.Response) -> dict:

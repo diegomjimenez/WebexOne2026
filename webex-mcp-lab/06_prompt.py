@@ -15,6 +15,7 @@ Run it:
     python 06_prompt.py
 """
 
+import logging
 import os
 import sys
 
@@ -23,6 +24,13 @@ from dotenv import load_dotenv
 from mcp.server import MCPServer
 
 WEBEX_API = "https://webexapis.com/v1"
+
+# Server-side logging -> stderr (never stdout, which carries the MCP protocol),
+# independent of the client, DEBUG by default. The token is never logged.
+log = logging.getLogger("webex")
+log.setLevel(logging.DEBUG)
+log.propagate = False
+log.addHandler(logging.StreamHandler(sys.stderr))
 
 # Load .env so the token is present however this script is launched - from a
 # terminal or by an MCP client - with no --env-file flag needed.
@@ -46,6 +54,9 @@ def post_status_update(space: str = "", topic: str = "") -> str:
     returns is not an answer - it is the opening message of a conversation,
     which the model then carries out using the tools below.
     """
+    # A prompt is triggered by the user. This line lets you see that happen,
+    # and with which fields, before any tool runs.
+    log.debug("post_status_update prompt invoked (space=%r, topic=%r)", space, topic)
     return (
         f"Post a status update about {topic or '<topic>'} to the "
         f"{space or '<space>'} space.\n"
@@ -64,6 +75,7 @@ def posting_guidelines() -> str:
     The URI above is how a client refers to this resource. The docstring is
     what the client shows in its picker.
     """
+    log.debug("posting_guidelines resource read")
     return (
         "# Posting guidelines\n"
         "\n"
@@ -83,12 +95,14 @@ async def list_rooms(limit: int = 20) -> dict:
     `limit` has a default, which makes it optional in the tool's schema - the
     model can call this with no arguments at all.
     """
+    log.debug("list_rooms: GET %s/rooms (max=%s)", WEBEX_API, limit)
     async with httpx.AsyncClient(timeout=10) as http:
         response = await http.get(
             f"{WEBEX_API}/rooms",
             headers={"Authorization": f"Bearer {TOKEN}"},
             params={"max": limit, "sortBy": "lastactivity"},
         )
+    log.debug("list_rooms: Webex responded HTTP %s", response.status_code)
 
     if response.status_code != 200:
         return {"error": f"Webex returned HTTP {response.status_code}."}
@@ -121,12 +135,15 @@ async def send_message(room_id: str, text: str) -> dict:
     will write. Building a second approval step in here would only teach people
     to click through two dialogs instead of one.
     """
+    # Log the room_id, never `text` - message bodies stay out of the log.
+    log.debug("send_message: POST %s/messages (room_id=%s)", WEBEX_API, room_id)
     async with httpx.AsyncClient(timeout=10) as http:
         response = await http.post(
             f"{WEBEX_API}/messages",
             headers={"Authorization": f"Bearer {TOKEN}"},
             json={"roomId": room_id, "text": text},
         )
+    log.debug("send_message: Webex responded HTTP %s", response.status_code)
 
     if response.status_code not in (200, 201):
         return {"error": f"Webex returned HTTP {response.status_code}."}

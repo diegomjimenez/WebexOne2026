@@ -10,6 +10,7 @@ Run it:
     python 04_send_message.py
 """
 
+import logging
 import os
 import sys
 
@@ -18,6 +19,13 @@ from dotenv import load_dotenv
 from mcp.server import MCPServer
 
 WEBEX_API = "https://webexapis.com/v1"
+
+# Server-side logging -> stderr (never stdout, which carries the MCP protocol),
+# independent of the client, DEBUG by default. The token is never logged.
+log = logging.getLogger("webex")
+log.setLevel(logging.DEBUG)
+log.propagate = False
+log.addHandler(logging.StreamHandler(sys.stderr))
 
 # Load .env so the token is present however this script is launched - from a
 # terminal or by an MCP client - with no --env-file flag needed.
@@ -40,12 +48,14 @@ async def list_rooms(limit: int = 20) -> dict:
     `limit` has a default, which makes it optional in the tool's schema - the
     model can call this with no arguments at all.
     """
+    log.debug("list_rooms: GET %s/rooms (max=%s)", WEBEX_API, limit)
     async with httpx.AsyncClient(timeout=10) as http:
         response = await http.get(
             f"{WEBEX_API}/rooms",
             headers={"Authorization": f"Bearer {TOKEN}"},
             params={"max": limit, "sortBy": "lastactivity"},
         )
+    log.debug("list_rooms: Webex responded HTTP %s", response.status_code)
 
     if response.status_code != 200:
         return {"error": f"Webex returned HTTP {response.status_code}."}
@@ -78,12 +88,17 @@ async def send_message(room_id: str, text: str) -> dict:
     will write. Building a second approval step in here would only teach people
     to click through two dialogs instead of one.
     """
+    # Log the room_id but not `text`. The same care that keeps the token out
+    # of results keeps message bodies out of the log - decide what is safe to
+    # write down, and write down only that.
+    log.debug("send_message: POST %s/messages (room_id=%s)", WEBEX_API, room_id)
     async with httpx.AsyncClient(timeout=10) as http:
         response = await http.post(
             f"{WEBEX_API}/messages",
             headers={"Authorization": f"Bearer {TOKEN}"},
             json={"roomId": room_id, "text": text},
         )
+    log.debug("send_message: Webex responded HTTP %s", response.status_code)
 
     if response.status_code not in (200, 201):
         return {"error": f"Webex returned HTTP {response.status_code}."}
