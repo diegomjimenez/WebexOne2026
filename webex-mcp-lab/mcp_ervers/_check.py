@@ -1,11 +1,15 @@
-"""Throwaway verification harness. Not part of the lab; deleted before delivery.
-
-Connects to a numbered script over stdio as a real MCP client would, and prints
-the tools, resources, and prompts it advertises.
-
-    python _check.py 01_hello_mcp.py
-    python _check.py 02_list_books.py --call list_address_books
 """
+Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
+
+- Diego Manuel Jimenez Moreno
+- Mo Eyad Musallam
+"""
+# Throwaway verification harness. Not part of the lab; deleted before delivery.
+# Connects to a numbered script over stdio as a real MCP client would, and prints
+# the tools, resources, and prompts it advertises.
+#
+#     python _check.py 02_list_books.py
+#     python _check.py 02_list_books.py --call list_address_books
 
 import asyncio
 import json

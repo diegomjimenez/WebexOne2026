@@ -1,16 +1,11 @@
-"""Address book domain - the whole lab, in the shape a server keeps.
-
-This one module registers all three MCP primitives for Contact Center address
-books: four tools, one resource, and one prompt. It is the modular form of
-chapters 02-05.
-
-Needs a Contact Center organization and a token carrying cjp:config_read and
-cjp:config_write. It asks for its extra credentials at registration time, so a
-misconfiguration is reported once at startup, not once per tool call.
-
-No delete tools. Address books are shared configuration, so the destructive
-verbs are left out on purpose.
 """
+Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
+
+- Diego Manuel Jimenez Moreno
+- Mo Eyad Musallam
+"""
+# Address book domain - all three MCP primitives in one module.
+# Four tools + one resource + one prompt, modular form of chapters 02-06.
 
 from webex_client import failure
 
@@ -18,8 +13,8 @@ from webex_client import failure
 def register(mcp, client) -> None:
     """Add this domain's tools, resource, and prompt to the server."""
 
-    # Asking for the extra credentials here means a misconfiguration is reported
-    # once, at startup, naming both the missing variable and this domain.
+    # Ask for the extra credentials at registration time so any misconfiguration
+    # is reported once at startup, naming this domain.
     settings = client.require(
         "WEBEX_ORG_ID", "WXCC_CONFIG_API_BASE", needed_by="the address book domain"
     )
@@ -64,10 +59,11 @@ def register(mcp, client) -> None:
 
         books = [
             {"id": b.get("id"), "name": b.get("name"), "description": b.get("description")}
-            for b in response.json().get("items", [])
+            for b in response.json().get("data", [])
         ]
         return {"count": len(books), "address_books": books}
 
+    # No confirm arg: consent belongs to the host, not the server.
     @mcp.tool()
     async def create_address_book(name: str, description: str = "") -> dict:
         """Create a new address book. Returns its id, which add_entry then needs.
@@ -92,7 +88,6 @@ def register(mcp, client) -> None:
         if search:
             params["search"] = search
 
-        # Listing entries is the one operation on v2; the others below vary too.
         response = await client.request(
             "GET", f"{org}/v2/address-book/{address_book_id}/entry", params=params
         )
@@ -101,7 +96,7 @@ def register(mcp, client) -> None:
 
         entries = [
             {"id": e.get("id"), "name": e.get("name"), "number": e.get("number")}
-            for e in response.json().get("items", [])
+            for e in response.json().get("data", [])
         ]
         return {"count": len(entries), "entries": entries}
 

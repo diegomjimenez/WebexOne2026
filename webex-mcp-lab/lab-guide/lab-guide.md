@@ -13,18 +13,35 @@ finish.
 
 ## Before anything else: how this lab works
 
-**Every step is a complete, standalone program.** There are six of them:
+**Every step is a complete, standalone program.** There are seven of them:
 
 ```
-01_hello_mcp.py       the smallest server that works (no network, no token)
-02_list_books.py      the first real Contact Center call: list address books
-03_write_books.py     writing: create a book, then add contacts to it
-04_resource.py        the second primitive: a resource
-05_prompt.py          the third primitive: a prompt
-06_modular/           the same server, built to grow
+webex-mcp-lab/
+    mcp_servers/
+        01_hello_mcp.py               the smallest server (no network, no token)
+        01_hello_mcp_protocol_log.py  same server, with deprecated ctx.log()
+        02_list_books.py              first real Contact Center call
+        03_list_entries.py            id chaining: use a book id to list entries
+        04_write_books.py             writing: create a book, add contacts
+        05_resource.py                the second primitive: a resource
+        06_prompt.py                  the third primitive: a prompt
+        07_modular/                   the same server, built to grow
+        _check.py                     quick credential check helper
+    mcp_clients/
+        01_hello_mcp_client.py        test client for 01 (no credentials needed)
+        02_list_books_client.py       test client for 02
+        03_list_entries_client.py     test client for 03 (chains book id)
+        04_write_books_client.py      test client for 04
+        05_resource_client.py         test client for 05
+        06_prompt_client.py           test client for 06
+        run_client.py                 small shared runner used by every client
+        _verbose.py                   advanced: JSON-RPC frame tap for --verbose
+    lab-guide/                        this guide and screenshots
+    .env                              your credentials (git-ignored)
+    requirements.txt                  pip dependencies
 ```
 
-Each file runs on its own. `04_resource.py` does not import `02_list_books.py`,
+Each server runs on its own. `05_resource.py` does not import `02_list_books.py`,
 and none of them import a shared helper module. That means a step never breaks
 because you skipped the one before it — each chapter carries a full copy of the
 tools it has reached so far.
@@ -48,7 +65,7 @@ a network.
 > **Read this before you start.** Every chapter except 01 talks to Webex Contact
 > Center. If you do not have a Contact Center organization and a token with the
 > `cjp:config_read` and `cjp:config_write` scopes, you can still do chapter 01,
-> but 02–06 will refuse to start and tell you which credential is missing. Decide
+> but 02–07 will refuse to start and tell you which credential is missing. Decide
 > now which path you are on so you are not surprised later.
 
 ### 1. Create and activate a virtual environment
@@ -129,7 +146,7 @@ into a chat window or a screenshot.
 ### 5. Check it works
 
 ```
-python 01_hello_mcp.py
+python mcp_servers/01_hello_mcp.py
 ```
 
 It prints one line — `webex-mcp-lab-01 running on stdio ...` — and then appears
@@ -143,7 +160,7 @@ works even before you have filled in `.env`.
 | Chapter | What you need |
 |---|---|
 | 01 | Nothing. No token, no network. |
-| 02 – 06 | A Webex **Contact Center** organization, a token with the `cjp:config_read` and `cjp:config_write` scopes, plus `WEBEX_ORG_ID` and `WXCC_CONFIG_API_BASE` in your `.env`. |
+| 02 – 07 | A Webex **Contact Center** organization, a token with the `cjp:config_read` and `cjp:config_write` scopes, plus `WEBEX_ORG_ID` and `WXCC_CONFIG_API_BASE` in your `.env`. |
 
 **If you do not have a Contact Center organization, you can still complete
 chapter 01** and read the rest. Every other chapter needs the credentials above,
@@ -169,7 +186,7 @@ Create `.vscode/mcp.json` in your workspace:
   "servers": {
     "webex-mcp-lab": {
       "command": "/absolute/path/to/webex-mcp-lab/.venv/Scripts/python.exe",
-      "args": ["01_hello_mcp.py"],
+      "args": ["mcp_servers/01_hello_mcp.py"],
       "cwd": "/absolute/path/to/webex-mcp-lab"
     }
   }
@@ -181,7 +198,7 @@ the lab folder so the server finds your `.env`. On macOS and Linux the
 interpreter is `.venv/bin/python` instead of `.venv/Scripts/python.exe`.
 
 Replace both paths with your own, and change the script name as you work through
-the chapters (for the modular finale, point `args` at `06_modular/server.py`).
+the chapters (for the modular finale, point `args` at `mcp_servers/07_modular/server.py`).
 Use forward slashes on every platform, including Windows. No environment-file
 flag is needed — the server loads `.env` itself.
 
@@ -199,7 +216,7 @@ same shape — a command, its arguments, and the environment.
 
 ## Chapter 01 — the smallest server that works
 
-**File: `01_hello_mcp.py`**
+**File: `mcp_servers/01_hello_mcp.py`**
 
 No Webex, no network, no token. One question: what does it take to make a
 Python function callable by an AI assistant?
@@ -231,19 +248,57 @@ The decorator does three separate jobs, and it is worth separating them:
 > and get `ModuleNotFoundError: No module named 'mcp.server.fastmcp'`, this is
 > why.
 
-Chapter 01 already uses the same dual-sink logging as the rest of the lab — it
-writes to stderr *and* `01_hello_mcp.log`, in the same format, so you can
-review the greet calls after the fact. The full explanation is in chapter 02.
+Chapter 01 already uses the same logging as the rest of the lab — every tool
+call writes a DEBUG line to stderr. The host displays it and nothing is written
+to disk. The full explanation is in chapter 02.
 
 Ask your client: *"greet Diego"*.
 
-![The assistant calling the greet tool and returning the greeting](images/01-greet-vscode.png)
+![The assistant calling the greet tool and returning the greeting]()
+
+### Try it from the command line
+
+The test client starts the server for you, calls the tool, and shows you the
+result — no VS Code or bot needed, no credentials either:
+
+```
+python mcp_clients/01_hello_mcp_client.py
+```
+
+Add `--verbose` to see every JSON-RPC message flowing between client and server.
+This is the protocol that VS Code hides behind its UI — `initialize`,
+`tools/list`, `tools/call`, and their responses:
+
+```
+python mcp_clients/01_hello_mcp_client.py --verbose
+```
+
+```
+  CLIENT -> {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"mcp","version":"0.1.0"},"_meta":{}}}
+  SERVER -> {"jsonrpc":"2.0","id":1,"result":{"capabilities":{"experimental":{},"prompts":{"listChanged":false},"resources":{"listChanged":false,"subscribe":false},"tools":{"listChanged":false}},"protocolVersion":"2025-11-25","serverInfo":{"name":"webex-mcp-lab-01","version":""}}}
+
+-- Tools ---------------------------------------------------
+  CLIENT -> {"jsonrpc":"2.0","method":"notifications/initialized"}
+  CLIENT -> {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{"_meta":{}}}
+  SERVER -> {"jsonrpc":"2.0","id":2,"result":{"tools":[{"description":"Greet someone by name.\n\nThree things happen because of the decorator above:\n\n1. The client discovers a tool called `greet`.\n2. This docstring becomes the tool's description - it is how the model\n   decides whether this tool is the right one to call.\n3. The `name: str` annotation becomes the tool's input schema, so the\n   client knows to send one string argument.\n\nThat is the whole idea. A tool is a function the model is allowed to call.\n","inputSchema":{"properties":{"name":{"title":"Name","type":"string"}},"required":["name"],"type":"object","title":"greetArguments"},"name":"greet","outputSchema":{"properties":{"result":{"title":"Result","type":"string"}},"required":["result"],"type":"object","title":"greetOutput"}}]}}
+  greet: Greet someone by name.
+
+Three things happen because of the decorator above:
+
+1.
+
+-- Call: greet ---------------------------------------------
+  CLIENT -> {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"greet","arguments":{"name":"Lab"},"_meta":{}}}
+  SERVER -> {"jsonrpc":"2.0","id":3,"result":{"content":[{"text":"Hello, Lab. Your first MCP tool just ran.","type":"text"}],"isError":false,"structuredContent":{"result":"Hello, Lab. Your first MCP tool just ran."}}}
+  Hello, Lab. Your first MCP tool just ran.
+  ```
+
 
 ---
 
 ## Chapter 02 — the first real Webex call: list address books
 
-**File: `02_list_books.py`**
+**File: `mcp_servers/02_list_books.py`**
 
 Now the tool talks to Webex Contact Center and hands back a real collection: the
 address books configured in your organization.
@@ -271,12 +326,12 @@ The second is the shape of the result:
 ```python
 books = [
     {"id": book.get("id"), "name": book.get("name"), "description": book.get("description")}
-    for book in response.json().get("items", [])
+    for book in response.json().get("data", [])
 ]
 return {"count": len(books), "address_books": books}
 ```
 
-Webex wraps collections in an `items` key and each record has many fields. We
+Webex wraps collections in a `data` key and each record has many fields. We
 unwrap it and keep three, because **everything a tool returns is read by a
 language model** — it becomes context the model has to process. The `id` is
 there because the next chapter needs it. And the token, obviously, never appears
@@ -286,64 +341,79 @@ Ask your client: *"list my Contact Center address books"*.
 
 ![The assistant listing address books returned by the list_address_books tool](images/02-list-books-vscode.png)
 
+### Try it from the command line
+
+```
+python mcp_clients/02_list_books_client.py
+python mcp_clients/02_list_books_client.py --verbose
+```
+
+The verbose output is the same shape as chapter 01, but now the `tools/call`
+result contains real API data — the address books in your organization.
+
 ### Watching the server work
 
-Run `02_list_books.py` and call the tool, and you will see more than the banner:
+Run `mcp_servers/02_list_books.py` and call the tool, and you will see more than the banner:
 
 ```
 2026-08-28 18:20:01,442 DEBUG webex: list_address_books: GET https://api.wxcc-us1.cisco.com/organization/<org>/v3/address-book
 2026-08-28 18:20:01,905 DEBUG webex: list_address_books: Webex responded HTTP 200
 ```
 
-That is the server's own log, and every chapter from here keeps one. It goes to
-**two places at once**: the live stderr stream *and* a file next to the script
-(`02_list_books.log`, `03_write_books.log`, and so on). A block near the top of
-each file sets both up:
+Logs are configured in two lines at the top of every server:
 
 ```python
-LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("webex")
-log.setLevel(logging.DEBUG)
-log.propagate = False
-for _handler in (
-    logging.StreamHandler(sys.stderr),
-    logging.FileHandler(Path(__file__).with_suffix(".log"), encoding="utf-8"),
-):
-    _handler.setFormatter(logging.Formatter(LOG_FORMAT))
-    log.addHandler(_handler)
 ```
 
-Five properties are worth naming, because they are why this is safe and useful:
-
-- **It goes to stderr, never stdout.** stdout carries the MCP protocol — a stray
-  `print` there corrupts it. Logs belong on stderr, which is exactly where an
-  MCP host collects them.
-- **It is also written to a file, beside the server.** The path comes from
-  `__file__`, so the log lands next to the script no matter which directory the
-  host launched it from. The modular server (chapter 06) writes one
-  `webex-mcp-lab.log`; each numbered chapter writes its own `NN_<name>.log`.
-- **The file appends across runs**, so you can compare today's run against
-  yesterday's. `*.log` is git-ignored, so these never get committed.
-- **It does not depend on the client.** The level is `DEBUG` in the code, so you
-  see the same trace whether the server is driven by VS Code, the bot, or the
-  `_check.py` script. Nothing needs to ask for logging.
-- **It never logs a secret.** The token is not logged, and neither is a contact's
-  phone number (chapter 03). A log line is a decision about what is safe to write
-  down — make it deliberately.
-
-Every chapter uses the same block, including chapter 01 — so even the no-network
-intro produces `01_hello_mcp.log`, and you can review past greet calls there.
-
-As you work through the chapters the log grows with the feature: a request and
-its status in 02–03, the resource read in 04, the prompt firing in 05, and every
-Contact Center failure through one line. Chapter 06 collapses all of it into a
-single request line written once, in the shared client.
+They go to **stderr only** — never stdout, which carries the MCP protocol — and
+the host (VS Code, the bot, your terminal) shows them; nothing is written to
+disk. The token is never logged. The same two lines sit in every chapter.
 
 ---
 
-## Chapter 03 — writing: create a book, then fill it
+## Chapter 03 — id chaining: list the entries inside a book
 
-**File: `03_write_books.py`**
+**File: `mcp_servers/03_list_entries.py`**
+
+Chapter 02 listed address books. Each book in the result has an `id`. This
+chapter uses that id to look inside a book and list its contacts — carrying the
+output of one call into the input of the next.
+
+Nothing is written. Both tools here are pure reads. The idea is to practise
+chaining before mutation enters the picture in chapter 04.
+
+The server exposes two tools:
+
+- `list_address_books` — the same read-only tool from chapter 02, carried
+  forward so this chapter is standalone.
+- `list_entries(address_book_id, search="")` — takes the `id` you got from
+  listing books and returns the contacts inside that book.
+
+Ask your client: *"list my address books, then show me the entries in the first
+one"* — and watch the model carry the id from the first call into the second.
+
+### Try it from the command line
+
+```
+python mcp_clients/03_list_entries_client.py
+python mcp_clients/03_list_entries_client.py --verbose
+```
+
+The client does the chaining for you: it calls `list_address_books`, takes the
+first book's id, and passes it to `list_entries`. In verbose mode you see two
+`tools/call` frames on the wire, the second carrying the id from the first
+response — chaining made visible at the protocol level.
+
+If your organization has no address books yet, the client reports there is
+nothing to chain and exits cleanly.
+
+---
+
+## Chapter 04 — writing: create a book, then fill it
+
+**File: `mcp_servers/04_write_books.py`**
 
 Everything so far only read. This chapter writes, and it introduces two ideas
 at once.
@@ -407,11 +477,22 @@ is written.
 
 ![The assistant creating an address book and adding a contact through the Contact Center tools](images/03-write-books-vscode.png)
 
+### Try it from the command line
+
+```
+python mcp_clients/04_write_books_client.py
+python mcp_clients/04_write_books_client.py --verbose
+```
+
+The client lists all four tools but only calls `list_address_books` — it is
+read-only by design, so running it cannot modify your organization. In verbose
+mode, notice that `tools/list` now returns four tools instead of one.
+
 ---
 
-## Chapter 04 — the second primitive: a resource
+## Chapter 05 — the second primitive: a resource
 
-**File: `04_resource.py`**
+**File: `mcp_servers/05_resource.py`**
 
 MCP has three primitives. You have been using one of them.
 
@@ -437,11 +518,23 @@ here — and it need not correspond to anything on a network.
 
 ![The resource picker in Visual Studio Code showing the address book conventions resource offered by the server](images/04-resource-vscode.png)
 
+### Try it from the command line
+
+```
+python mcp_clients/05_resource_client.py
+python mcp_clients/05_resource_client.py --verbose
+```
+
+This is where the verbose output gets interesting. Two new JSON-RPC methods
+appear for the first time: `resources/list` and `resources/read`. The client
+lists all resources, reads the conventions resource, then lists tools and calls
+one — so you see the full surface of a server that offers both primitives.
+
 ---
 
-## Chapter 05 — the third primitive: a prompt
+## Chapter 06 — the third primitive: a prompt
 
-**File: `05_prompt.py`**
+**File: `mcp_servers/06_prompt.py`**
 
 ```python
 @mcp.prompt()
@@ -481,18 +574,30 @@ become fields the client asks the user to fill in.
 
 ![The prompt appearing as a slash command in the client, with fields for book name and team](images/05-prompt-vscode.png)
 
+### Try it from the command line
+
+```
+python mcp_clients/06_prompt_client.py
+python mcp_clients/06_prompt_client.py --verbose
+```
+
+Two more new JSON-RPC methods: `prompts/list` and `prompts/get`. The client
+lists prompts, gets `set_up_address_book` with sample arguments, then lists
+resources and tools — so the verbose output now shows all three MCP primitives
+exercised in a single session.
+
 ---
 
-## Chapter 06 — the same server, built to grow
+## Chapter 07 — the same server, built to grow
 
-**Directory: `06_modular/`**
+**Directory: `mcp_servers/07_modular/`**
 
 Every chapter so far put everything in one file. That is the right shape for
 reading and the wrong shape for a server you keep. This chapter is the same
 functionality in the shape you would actually maintain.
 
 ```
-06_modular/
+mcp_servers/07_modular/
     server.py            decides which domains are switched on
     webex_client.py      credentials and HTTP, resolved once
     tools/
@@ -507,7 +612,7 @@ Three kinds of file, and no more.
 
 `tools/address_books.py` is a single domain module that registers **all three
 primitives** — four tools, the conventions resource, and the set-up prompt. It
-is the modular form of chapters 02–05, and it shows the pattern you would follow
+is the modular form of chapters 02–06, and it shows the pattern you would follow
 for any subject area: one file owns one domain, top to bottom.
 
 ### The whole extension mechanism
@@ -571,7 +676,7 @@ variable and the domain that wanted it — rather than once per tool call, as a
 
 ### One log line for every domain
 
-In chapters 02–05 each tool wrote its own DEBUG lines; here that moves into
+In chapters 02–06 each tool wrote its own DEBUG lines; here that moves into
 `webex_client.request`, which every domain already calls:
 
 ```python
@@ -583,9 +688,9 @@ log.debug("<- HTTP %s (%s %s)", response.status_code, method, url)
 Write it once and every domain is traced — including one you add tomorrow from
 the template, which needs no logging code of its own. The logger is configured
 once in `webex_client.py` and shared by name (`logging.getLogger("webex")`), so
-`server.py` and each domain reach the same two sinks — stderr and one
-`webex-mcp-lab.log` beside the server — with no setup. And because the token
-lives only in `WebexClient`, the request log physically cannot contain it.
+`server.py` and each domain use the same stderr sink with no setup. And because
+the token lives only in `WebexClient`, the request log physically cannot
+contain it.
 
 ![The modular server connected, showing the address book tools, resource, and prompt in one list](images/06-modular-vscode.png)
 
@@ -593,8 +698,8 @@ lives only in `WebexClient`, the request log physically cannot contain it.
 
 ## Add your own Webex API family
 
-Chapter 06 gave you the mechanism. Here is the recipe. There is a starting point
-in the tree for exactly this: `06_modular/tools/_template.py`. It is a complete
+Chapter 07 gave you the mechanism. Here is the recipe. There is a starting point
+in the tree for exactly this: `mcp_servers/07_modular/tools/_template.py`. It is a complete
 domain module that does nothing yet — it is not in `DOMAINS`, and its one tool
 returns placeholder data over no network — so copying it is safe and changes
 nothing until you wire it in.
@@ -621,6 +726,95 @@ Two notes so you are not surprised:
 - **The template tool is read-only on purpose.** For a write, copy the
   `create_address_book` or `add_entry` shape instead; for extra configuration,
   copy the `client.require(...)` line. Both live in `address_books.py`.
+
+---
+
+## Companion scripts and protocol observability — reference
+
+Each chapter above has a "Try it from the command line" section that introduces
+its test client. This section is a quick-reference summary and explains the
+logging layers in more detail.
+
+| Server | Client | Needs credentials? |
+|---|---|---|
+| `mcp_servers/01_hello_mcp.py` | `mcp_clients/01_hello_mcp_client.py` | No |
+| `mcp_servers/02_list_books.py` | `mcp_clients/02_list_books_client.py` | Yes |
+| `mcp_servers/03_list_entries.py` | `mcp_clients/03_list_entries_client.py` | Yes |
+| `mcp_servers/04_write_books.py` | `mcp_clients/04_write_books_client.py` | Yes |
+| `mcp_servers/05_resource.py` | `mcp_clients/05_resource_client.py` | Yes |
+| `mcp_servers/06_prompt.py` | `mcp_clients/06_prompt_client.py` | Yes |
+
+Every client accepts `--verbose` (`-v`) to print raw JSON-RPC frames.
+
+The clients share a small runner in `mcp_clients/run_client.py` — it spawns the
+matching server from `mcp_servers/`, connects via `mcp.Client`, and runs the
+`exercise` coroutine that each numbered client file defines. When you pass
+`--verbose`, `run_client.py` lazily imports `mcp_clients/_verbose.py`, which
+taps the stdio streams and prints every JSON-RPC frame as `CLIENT ->` or
+`SERVER ->`. `_verbose.py` is labelled advanced/optional reading: you do not
+need to open it to use the clients.
+
+### Three layers of logging
+
+```
+Layer           Where it lives      Who sees it
+--------------- ------------------- ----------------------------
+Python logging  stderr              you (the server operator)
+ctx.log()       JSON-RPC protocol   the client (DEPRECATED)
+JSON-RPC frames stdin/stdout wire   nobody, unless you intercept
+```
+
+**Python logging** is the durable approach. Every chapter uses it. It goes to
+stderr only — the host displays it, and nothing is written to disk. The server
+owns it; the client never sees it. This is what you should use going forward.
+
+**`ctx.log()`** sent `notifications/message` frames to the client over the
+protocol. The MCP spec retired this feature in SEP-2577 (2026-07-28): modern
+servers only send log entries when the request explicitly opts in via `_meta`,
+and the whole capability is being wound down. `ctx.log()` still works in today's
+SDK but emits a deprecation warning.
+
+**JSON-RPC frames** are the raw protocol itself — `initialize`, `tools/list`,
+`tools/call`, and their responses. The test-client companions intercept these
+when `--verbose` is on.
+
+### `mcp_servers/01_hello_mcp_protocol_log.py` — old vs new logging
+
+This companion mirrors `01_hello_mcp.py` but demonstrates both logging
+approaches in the same tool:
+
+```python
+log.debug("greet called: name=%r", name)       # Python logging (durable)
+await ctx.log("debug", f"greet called: ...")    # ctx.log (deprecated)
+```
+
+Run it the same way:
+
+```
+python mcp_servers/01_hello_mcp_protocol_log.py
+```
+
+It starts identically to `01_hello_mcp.py`. The difference only shows when
+a client calls the `greet` tool: the Python log line always appears in stderr;
+the `ctx.log` line only appears if the client opted in to protocol-level
+logging.
+
+### What to look for in `--verbose` output
+
+- **The `initialize` handshake.** The client sends its capabilities, the server
+  replies with its own. This is where the protocol version and server name are
+  exchanged.
+- **`notifications/initialized`.** The client confirms the handshake. Only after
+  this can either side send requests.
+- **`resources/list`, `tools/list`, `prompts/list`.** The client discovers what
+  the server offers.
+- **`tools/call`.** The actual work. If credentials are missing, the server exits
+  before the handshake completes and the client prints a message explaining why.
+
+> **Note:** Clients 02–06 require the same `.env` credentials as the servers
+> they spawn (Contact Center access). Without credentials the server exits at
+> startup and the client reports the connection closed early. Client 01 needs
+> no credentials — it is the ideal first test.
 
 ---
 

@@ -1,47 +1,21 @@
-"""Step 05 - the third primitive: a prompt.
-
-New in this step: `set_up_address_book`, registered with @mcp.prompt.
-
-Now all three primitives are in one file, and the split is worth naming:
-
-    tool      the model decides to call it        an action
-    resource  the client attaches it              reference material
-    prompt    the *user* picks it from a menu     a starting point
-
-A prompt is a pre-written request, usually surfaced as a slash command or a menu
-item. It is the one primitive a human triggers directly. This one packages the
-whole "set up an address book" workflow - read the conventions, avoid a
-duplicate, create the book, add the contacts - so a user can start it without
-knowing any of the steps.
-
-Same three credentials as step 02.
-
-Run it:
-    python 05_prompt.py
 """
+Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
+
+- Diego Manuel Jimenez Moreno
+- Mo Eyad Musallam
+"""
+# Step 06 - the third primitive: a prompt (a starting point the user picks).
 
 import logging
 import os
 import sys
-from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
 from mcp.server import MCPServer
 
-# Server-side logging -> stderr AND a file beside this script (05_prompt.log),
-# one shared format, DEBUG by default. stdout carries the MCP protocol, so logs
-# never go there. The token and a contact's number are never logged.
-LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("webex")
-log.setLevel(logging.DEBUG)
-log.propagate = False
-for _handler in (
-    logging.StreamHandler(sys.stderr),
-    logging.FileHandler(Path(__file__).with_suffix(".log"), encoding="utf-8"),
-):
-    _handler.setFormatter(logging.Formatter(LOG_FORMAT))
-    log.addHandler(_handler)
 
 load_dotenv()
 
@@ -58,21 +32,19 @@ for _name, _value in (
         sys.exit(f"{_name} is not set. This lab needs Webex Contact Center - see .env.example.")
 
 ORG = f"{CONFIG_API_BASE.rstrip('/')}/organization/{ORG_ID}"
-HEADERS = {"Authorization": f"Bearer {TOKEN}"}
+HEADERS = {"Authorization": f"Bearer {TOKEN}", "Accept": "application/json"}
 
-mcp = MCPServer("webex-mcp-lab-05")
+mcp = MCPServer("webex-mcp-lab-06")
 
 
 @mcp.prompt()
 def set_up_address_book(book_name: str = "", team: str = "") -> str:
     """Set up an address book end to end: create it and add its first contacts.
 
-    The arguments become fields the client asks the user to fill in. What this
-    returns is not an answer - it is the opening message of a conversation,
-    which the model then carries out using the tools below.
+    Prompt arguments become fields the client asks the user to fill in. What
+    this returns is not an answer - it is the opening message of a workflow
+    the model then carries out with the tools below.
     """
-    # A prompt is triggered by the user. This line lets you see that happen, and
-    # with which fields, before any tool runs.
     log.debug("set_up_address_book prompt invoked (book_name=%r, team=%r)", book_name, team)
     return (
         f"Set up an address book called {book_name or '<book name>'} for the "
@@ -132,17 +104,17 @@ async def list_address_books(limit: int = 50) -> dict:
 
     books = [
         {"id": book.get("id"), "name": book.get("name"), "description": book.get("description")}
-        for book in response.json().get("items", [])
+        for book in response.json().get("data", [])
     ]
     return {"count": len(books), "address_books": books}
 
 
 @mcp.tool()
 async def create_address_book(name: str, description: str = "") -> dict:
-    """Create a new address book, following the webex://address-books/conventions resource.
+    """Create a new address book, following webex://address-books/conventions.
 
-    Returns its id, which add_entry then needs. Your MCP client asks for
-    approval before this runs.
+    Returns its id, which add_entry then needs. The MCP client asks the user
+    for approval before this runs.
     """
     log.debug("create_address_book: POST %s/v3/address-book (name=%r)", ORG, name)
     async with httpx.AsyncClient(timeout=15) as http:
@@ -179,17 +151,18 @@ async def list_entries(address_book_id: str, search: str = "") -> dict:
 
     entries = [
         {"id": entry.get("id"), "name": entry.get("name"), "number": entry.get("number")}
-        for entry in response.json().get("items", [])
+        for entry in response.json().get("data", [])
     ]
     return {"count": len(entries), "entries": entries}
 
 
 @mcp.tool()
 async def add_entry(address_book_id: str, name: str, number: str) -> dict:
-    """Add a contact to an address book, following the webex://address-books/conventions resource.
+    """Add a contact to an address book, following webex://address-books/conventions.
 
-    `number` should be E.164, e.g. +14155550101. `address_book_id` is the id
-    create_address_book returned. Your MCP client asks for approval before this runs.
+    `number` should be E.164, e.g. +14155550101. `address_book_id` is what
+    create_address_book returned. The MCP client asks the user for approval
+    before this runs.
     """
     log.debug("add_entry: POST %s/address-book/%s/entry", ORG, address_book_id)
     async with httpx.AsyncClient(timeout=15) as http:
@@ -207,8 +180,8 @@ async def add_entry(address_book_id: str, name: str, number: str) -> dict:
 
 
 if __name__ == "__main__":
-    # A one-line banner to stderr so the terminal shows the server is alive.
-    # It must go to stderr, not stdout - stdout carries the MCP protocol.
-    print("webex-mcp-lab-05 running on stdio - waiting for a client (Ctrl+C to stop).",
-          file=sys.stderr)
+    print(
+        "webex-mcp-lab-06 running on stdio - waiting for a client (Ctrl+C to stop).",
+        file=sys.stderr,
+    )
     mcp.run()

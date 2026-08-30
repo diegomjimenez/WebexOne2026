@@ -1,48 +1,21 @@
-"""Step 03 - writing: create a book, then fill it with contacts.
-
-Step 02 only read. This step writes, and it introduces two ideas at once:
-
-  * Writing and consent. `create_address_book` and `add_entry` change your
-    organization. Notice what is NOT in them: no `confirm` argument, no preview
-    step. Consent belongs to the host - your MCP client shows you the tool and
-    its arguments and waits for your approval before the function is ever
-    entered. A server that adds its own dialog only teaches people to click
-    through two. (There are also no delete tools here, on purpose: address books
-    are shared configuration, so the destructive verbs are simply left out.)
-
-  * Chaining. `create_address_book` returns the new book's id; `add_entry` takes
-    that id as its first argument. Watch the model carry the id from one call
-    into the next - that is most of what "using tools together" means.
-
-Same three credentials as step 02.
-
-Run it:
-    python 03_write_books.py
 """
+Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
+
+- Diego Manuel Jimenez Moreno
+- Mo Eyad Musallam
+"""
+# Step 05 - the second primitive: a resource (reference material the client attaches).
 
 import logging
 import os
 import sys
-from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
 from mcp.server import MCPServer
 
-# Server-side logging -> stderr AND a file beside this script
-# (03_write_books.log), one shared format, DEBUG by default. stdout carries the
-# MCP protocol, so logs never go there. The token and a contact's number are
-# never logged.
-LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("webex")
-log.setLevel(logging.DEBUG)
-log.propagate = False
-for _handler in (
-    logging.StreamHandler(sys.stderr),
-    logging.FileHandler(Path(__file__).with_suffix(".log"), encoding="utf-8"),
-):
-    _handler.setFormatter(logging.Formatter(LOG_FORMAT))
-    log.addHandler(_handler)
 
 load_dotenv()
 
@@ -59,16 +32,32 @@ for _name, _value in (
         sys.exit(f"{_name} is not set. This lab needs Webex Contact Center - see .env.example.")
 
 ORG = f"{CONFIG_API_BASE.rstrip('/')}/organization/{ORG_ID}"
-HEADERS = {"Authorization": f"Bearer {TOKEN}"}
+HEADERS = {"Authorization": f"Bearer {TOKEN}", "Accept": "application/json"}
 
-mcp = MCPServer("webex-mcp-lab-03")
+mcp = MCPServer("webex-mcp-lab-05")
+
+
+@mcp.resource("webex://address-books/conventions")
+def address_book_conventions() -> str:
+    """House style for address books in this organization.
+
+    A resource is read by the client, not called by the model.
+    """
+    log.debug("address_book_conventions resource read")
+    return (
+        "# Address book conventions\n"
+        "\n"
+        "- Name a book for its team or purpose, e.g. 'Sales - EMEA', not 'Book1'.\n"
+        "- Before creating a book, list existing books and reuse one if it fits.\n"
+        "- Store numbers in E.164 format: a leading +, country code, no spaces,\n"
+        "  e.g. +14155550101.\n"
+        "- Give every entry a human name; never add a bare number.\n"
+        "- Do not put internal notes or ticket ids in a contact's name field.\n"
+    )
 
 
 def _fail(response: httpx.Response) -> dict:
     """Turn an HTTP failure into a sentence the model can pass on to the user."""
-    # One place every failure passes through, so one log line covers them all.
-    # This is where the log earns its keep - a 403 in the terminal tells you it
-    # is a scope problem long before you read the returned sentence.
     log.debug("Contact Center request failed: HTTP %s", response.status_code)
     if response.status_code == 401:
         return {"error": "Webex rejected the token. Check that it has not expired."}
@@ -96,16 +85,17 @@ async def list_address_books(limit: int = 50) -> dict:
 
     books = [
         {"id": book.get("id"), "name": book.get("name"), "description": book.get("description")}
-        for book in response.json().get("items", [])
+        for book in response.json().get("data", [])
     ]
     return {"count": len(books), "address_books": books}
 
 
 @mcp.tool()
 async def create_address_book(name: str, description: str = "") -> dict:
-    """Create a new address book. Returns its id, which add_entry then needs.
+    """Create a new address book, following webex://address-books/conventions.
 
-    Your MCP client asks for approval before this runs.
+    Returns its id, which add_entry then needs. The MCP client asks the user
+    for approval before this runs.
     """
     log.debug("create_address_book: POST %s/v3/address-book (name=%r)", ORG, name)
     async with httpx.AsyncClient(timeout=15) as http:
@@ -125,10 +115,7 @@ async def create_address_book(name: str, description: str = "") -> dict:
 
 @mcp.tool()
 async def list_entries(address_book_id: str, search: str = "") -> dict:
-    """List the contacts inside one address book, optionally filtered by `search`.
-
-    Pass the `address_book_id` you got from create_address_book or list_address_books.
-    """
+    """List the contacts inside one address book, optionally filtered by `search`."""
     params: dict = {"page": 0, "pageSize": 100}
     if search:
         params["search"] = search
@@ -145,20 +132,19 @@ async def list_entries(address_book_id: str, search: str = "") -> dict:
 
     entries = [
         {"id": entry.get("id"), "name": entry.get("name"), "number": entry.get("number")}
-        for entry in response.json().get("items", [])
+        for entry in response.json().get("data", [])
     ]
     return {"count": len(entries), "entries": entries}
 
 
 @mcp.tool()
 async def add_entry(address_book_id: str, name: str, number: str) -> dict:
-    """Add a contact to an address book. `number` should be E.164, e.g. +14155550101.
+    """Add a contact to an address book, following webex://address-books/conventions.
 
-    `address_book_id` is the id create_address_book returned. Your MCP client
-    asks for approval before this runs.
+    `number` should be E.164, e.g. +14155550101. `address_book_id` is what
+    create_address_book returned. The MCP client asks the user for approval
+    before this runs.
     """
-    # Log which book is being written to; the contact's name and number are not
-    # logged - the same restraint the whole lab keeps about anything sensitive.
     log.debug("add_entry: POST %s/address-book/%s/entry", ORG, address_book_id)
     async with httpx.AsyncClient(timeout=15) as http:
         response = await http.post(
@@ -175,8 +161,8 @@ async def add_entry(address_book_id: str, name: str, number: str) -> dict:
 
 
 if __name__ == "__main__":
-    # A one-line banner to stderr so the terminal shows the server is alive.
-    # It must go to stderr, not stdout - stdout carries the MCP protocol.
-    print("webex-mcp-lab-03 running on stdio - waiting for a client (Ctrl+C to stop).",
-          file=sys.stderr)
+    print(
+        "webex-mcp-lab-05 running on stdio - waiting for a client (Ctrl+C to stop).",
+        file=sys.stderr,
+    )
     mcp.run()
