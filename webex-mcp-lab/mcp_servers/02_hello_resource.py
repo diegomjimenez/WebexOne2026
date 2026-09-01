@@ -4,7 +4,7 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 - Diego Manuel Jimenez Moreno
 - Mo Eyad Musallam
 """
-# Step 02 - the second primitive: a resource (reference material the client attaches).
+# Step 02 - the second primitive: a resource (organizational policy the client attaches).
 
 import re
 import sys
@@ -14,26 +14,31 @@ mcp = MCPServer("webex-mcp-lab-02")
 
 
 # WHO reads this? The CLIENT (not the server, not the tool below).
-# The client fetches the text and hands it to the model as context, like
-# dropping a spec sheet into the conversation. Nothing in this file calls
-# phone_format_rules() itself - that is the client's job.
-@mcp.resource("lab://phone-format")
-def phone_format_rules() -> str:
+# The client fetches the text and hands it to the model as context, so the
+# model sees the ORG RULES the tool code does not enforce. format_phone
+# only knows how to normalize digits; only this resource says which
+# countries are allowed and which ranges are reserved.
+@mcp.resource("lab://phone-policy")
+def phone_policy() -> str:
     return (
-        "Phone numbers must be in E.164 format:\n"
-        "- Start with a leading '+'.\n"
-        "- Country code, then subscriber number.\n"
-        "- Digits only. No spaces, dashes, or parentheses.\n"
-        "Examples: +14155550101 (US), +447700900123 (UK).\n"
-        "Note: format_phone assumes '+1' when given exactly 10 digits."
+        "phone-number policy for this organization:\n"
+        "\n"
+        "1. Allowed country codes: +1 (US/Canada), +44 (UK), +49 (Germany).\n"
+        "   Numbers with any other country code MUST be refused.\n"
+        "\n"
+        "2. The +1-555-0100 through +1-555-0199 range is reserved for\n"
+        "   internal testing. Refuse any number in that range.\n"
+        "\n"
+        "3. Normalize with format_phone before checking rules 1 and 2."
     )
 
 
-# WHO calls this? The AI assistant, once it has seen the rules above.
-# WHERE does the return go? Back to the assistant, which shows it to the user.
+# WHO calls this? The AI assistant, after reading the policy above.
+# WHERE does the return go? Back to the assistant, which then decides
+# whether the cleaned number satisfies the policy before showing the user.
 @mcp.tool()
 async def format_phone(number: str) -> str:
-    """Clean a phone number to E.164 form. See lab://phone-format for the rules."""
+    """Clean a phone number to E.164 form. See lab://phone-policy for organization rules."""
     digits = re.sub(r"\D", "", number)
     if not number.startswith("+") and len(digits) == 10:
         digits = "1" + digits

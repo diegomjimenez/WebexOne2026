@@ -20,8 +20,8 @@ webex-mcp-lab/
     mcp_servers/
         01_hello_mcp.py               the smallest server (no network, no token)
         01_hello_mcp_protocol_log.py  same server, with deprecated ctx.log()
-        02_hello_resource.py          adds a resource: the E.164 spec (no network)
-        03_hello_prompt.py            adds a prompt: batch-clean numbers (no network)
+        02_hello_resource.py          adds a resource: org phone policy (no network)
+        03_hello_prompt.py            adds a prompt: apply the policy to a list (no network)
         04_list_books.py              first real Contact Center call
         05_list_entries.py            id chaining: use a book id to list entries
         06_write_books.py             writing: create a book, add contacts
@@ -456,45 +456,59 @@ Still no Webex, still no credentials. This chapter adds MCP's second
 primitive on top of the same tool: a **resource**.
 
 ```python
-@mcp.resource("lab://phone-format")
-def phone_format_rules() -> str:
+@mcp.resource("lab://phone-policy")
+def phone_policy() -> str:
     return (
-        "Phone numbers must be in E.164 format:\n"
-        "- Start with a leading '+'.\n"
-        "- Country code, then subscriber number.\n"
-        "- Digits only. No spaces, dashes, or parentheses.\n"
-        "Examples: +14155550101 (US), +447700900123 (UK).\n"
-        "Note: format_phone assumes '+1' when given exactly 10 digits."
+        "Contact Center phone-number policy for this organization:\n"
+        "\n"
+        "1. Allowed country codes: +1 (US/Canada), +44 (UK), +49 (Germany).\n"
+        "   Numbers with any other country code MUST be refused.\n"
+        "\n"
+        "2. The +1-555-0100 through +1-555-0199 range is reserved for\n"
+        "   internal testing. Refuse any number in that range.\n"
+        "\n"
+        "3. Normalize with format_phone before checking rules 1 and 2."
     )
 ```
 
-A resource is not a tool. **A tool is an action the *model* decides to take;
-a resource is reference material the *client* attaches to the conversation,
-like dropping a spec sheet in front of the model.** Reading a resource
-changes nothing — which is exactly why the client can pull it in without
-asking you first.
+A resource is not a tool. **A tool is an action the *model* decides to
+take; a resource is context the *client* attaches to the conversation,
+like handing the model a house rulebook before it starts work.** Reading a
+resource changes nothing on the server — which is exactly why the client
+can pull it in without asking you first.
 
-Notice: nothing in this file *reads* the resource. `format_phone` does its
-job without it. The resource exists for the client, which fetches it and
-passes the text to the model as context. The scheme (`lab://`) and path
-(`phone-format`) are yours to choose — they need not correspond to anything
-on a network.
+Notice what's happening here: **the tool doesn't know these rules exist.**
+`format_phone` mechanically normalizes any digits you give it, French or
+otherwise. The policy lives entirely in the resource, and it only shapes
+behaviour because the client attaches it and the model reads it. That's
+the whole shape of a resource: **policy the tool cannot enforce alone.**
 
 ### Why the resource earns its keep
 
-|  | Without `lab://phone-format` | With `lab://phone-format` |
+Try each of these against a client that has attached the resource, and one
+that hasn't. The tool call returns the same value in both columns; what
+changes is what the model *decides* to do next.
+
+|  | Without `lab://phone-policy` | With `lab://phone-policy` |
 |---|---|---|
-| The model knows what E.164 is | Only from training data — vague, error-prone | From an exact spec the client attached to the conversation |
-| The model can *explain* the format | Guesses, sometimes gets it wrong | Reads directly from the resource before answering |
-| The model handles a UK number | May forget `format_phone` defaults to `+1` for 10 digits | Sees the note in the resource and passes `+44...` explicitly |
+| `format_phone("+33 1 42 68 53 00")` | Model returns `"+33142685300"` and calls it a win | Model reads the policy, sees +33 is not allowed, **refuses and asks for a supported number** |
+| `format_phone("415-555-0142")` | Model returns `"+14155550142"` and hands it back | Model reads the policy, spots the test range, **refuses and flags it as reserved** |
+| Editing the resource to also allow +33 | Nothing changes; tool code is unchanged | The model's decisions change on the next `resources/read`, without any code deploy |
 
-The tool implements the spec; the resource *is* the spec. That is the
-pattern to remember.
+The tool implements the mechanics; the resource carries the policy. That
+is the pattern to remember.
 
-**Ask your client:** *"clean these numbers: (415) 555-0101, 020 7946 0958"*.
-Watch whether the model reads the resource, notices the second number is UK,
-and re-formats it correctly (spoiler: it will not, unless you also tell it
-the country — which is the exercise below).
+> **Soft vs. hard enforcement.** Because the policy lives in text the
+> model reads, this is *soft* enforcement — a determined or overconfident
+> model can still ignore it. That's a real trade-off, not a bug. Chapter
+> 06 shows the other end: hard invariants that live in the tool code
+> itself, so no amount of coaxing can bypass them. Both patterns have a
+> place; you'll typically use resources for policies that change often and
+> tool-code for invariants that must never change.
+
+**Ask your client:** *"clean these numbers: (415) 555-0101, +33 1 42 68 53
+00, 415-555-0142"*. If the client has attached the resource, you should
+see one accepted number and two refusals with reasons.
 
 ### Try it from the command line
 
@@ -520,11 +534,12 @@ MCP primitive on top of chapter 02: a **prompt**.
 @mcp.prompt()
 def clean_contact_list(raw_numbers: str = "") -> str:
     return (
-        "Clean these phone numbers to E.164 format:\n\n"
-        f"{raw_numbers or '<paste your numbers here, one per line>'}\n\n"
-        "1. Read the lab://phone-format resource first.\n"
-        "2. Call format_phone once for every line above and collect the results.\n"
-        "3. Show me the cleaned list. Flag any line that looks invalid."
+        "Review these phone numbers against our policy:\n\n"
+        f"{raw_numbers or '<paste numbers here, one per line - policy will be applied>'}\n\n"
+        "1. Read the lab://phone-policy resource for the org rules.\n"
+        "2. Call format_phone once for every line to normalize it.\n"
+        "3. Reject any number that violates rule 1 (country) or rule 2 (test range).\n"
+        "4. Return two lists back to me: accepted (E.164) and rejected (with reason)."
     )
 ```
 
@@ -536,15 +551,18 @@ server.
 
 Notice the argument: `raw_numbers`. Prompt arguments become fields the
 client asks the user to fill in before the workflow starts. Paste a list of
-numbers, hit go, and the model reads the phone-format resource, calls
-`format_phone` on each line, and hands you back a cleaned list.
+numbers, hit go, and the model reads the policy, normalizes each number
+with `format_phone`, then hands you back **two** lists — the numbers that
+passed the policy and the numbers that were rejected, with the reason next
+to each rejection.
 
 ### Why the prompt earns its keep
 
 |  | Without `clean_contact_list` | With `clean_contact_list` |
 |---|---|---|
 | Running the workflow | The user has to type the whole plan every time | The user picks it from a menu and pastes the list |
-| Consistency | Each run may skip a step or forget the resource | Every run reads the resource, iterates, and flags failures |
+| Consistency | Each run may skip a step or forget the resource | Every run reads the policy, iterates, and partitions |
+| Output shape | Bare list of cleaned numbers | Two lists: **accepted** (E.164) and **rejected** (with reason) |
 | Discoverability | The user has to know the tool and resource exist | The prompt appears in the client's slash menu next to the server |
 
 ### The three primitives, side by side
@@ -555,7 +573,7 @@ All three primitives are now in one file, and the difference between them is
 | Primitive | Who invokes it | What it is | Example in this chapter |
 |---|---|---|---|
 | tool | the model | an action | `format_phone(number)` |
-| resource | the client | reference material | `lab://phone-format` |
+| resource | the client | policy / reference material | `lab://phone-policy` |
 | prompt | the **user** | a starting point | `clean_contact_list(raw_numbers)` |
 
 ### Try it from the command line
