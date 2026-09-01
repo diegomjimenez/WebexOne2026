@@ -20,8 +20,8 @@ webex-mcp-lab/
     mcp_servers/
         01_hello_mcp.py               the smallest server (no network, no token)
         01_hello_mcp_protocol_log.py  same server, with deprecated ctx.log()
-        02_hello_resource.py          the resource primitive (no network)
-        03_hello_prompt.py            the prompt primitive (no network)
+        02_hello_resource.py          adds a resource: the E.164 spec (no network)
+        03_hello_prompt.py            adds a prompt: batch-clean numbers (no network)
         04_list_books.py              first real Contact Center call
         05_list_entries.py            id chaining: use a book id to list entries
         06_write_books.py             writing: create a book, add contacts
@@ -221,7 +221,7 @@ the chapters (for the modular finale, point `args` at `mcp_servers/07_modular/se
 Use forward slashes on every platform, including Windows. No environment-file
 flag is needed — the server loads `.env` itself.
 
-![Visual Studio Code showing the webex-mcp-lab server connected, with the greet tool listed in the tool picker]
+![Visual Studio Code showing the webex-mcp-lab server connected, with the format_phone tool listed in the tool picker]
 
 ### Codex CLI in Visual Studio Code
 
@@ -281,9 +281,10 @@ webex-mcp-lab  C:/WebexOne/31.08.2026/WebexOne2026/webex-mcp-lab/.venv/Scripts/p
 ```
 
 
-Ask Codex to `use MCP to greet`. It starts the server, discovers `greet`, and
-asks for approval before calling it. For the complete Codex walkthrough and log
-locations, see [Using Codex as an MCP client](codex-mcp-client.md).
+Ask Codex to `use MCP to clean the number (415) 555-0101`. It starts the
+server, discovers `format_phone`, and asks for approval before calling it.
+For the complete Codex walkthrough and log locations, see
+[Using Codex as an MCP client](codex-mcp-client.md).
 
 ### The Webex bot client
 
@@ -297,68 +298,68 @@ same shape — a command, its arguments, and the environment.
 
 ## Chapter 01 — the smallest server that works
 
-
-!!!!
-howto run it
-!!!!
-
-![run](C:\WorkRelated_LocalFiles\wx1Simple\WebexOne2026\webex-mcp-lab\lab-guide\images\01_hello_mcp.png)
-
-
-
 **File: `mcp_servers/01_hello_mcp.py`**
 
 No Webex, no network, no token. One question: what does it take to make a
 Python function callable by an AI assistant?
 
-The answer is three lines.
+The answer is a decorator on a real function. Here is the whole tool:
 
 ```python
-mcp = MCPServer("webex-mcp-lab-01")
-
+import re
 
 @mcp.tool()
-async def greet(name: str) -> str:
-    """Greet someone by name."""
-    return f"Hello, {name}. Your first MCP tool just ran."
+async def format_phone(number: str) -> str:
+    """Clean a phone number to E.164 form, e.g. +14155550101."""
+    digits = re.sub(r"\D", "", number)
+    if not number.startswith("+") and len(digits) == 10:
+        digits = "1" + digits
+    return "+" + digits
 ```
 
-The decorator does three separate jobs, and it is worth separating them:
+Everything a `@mcp.tool()` decorator does is on display here:
 
-1. **Discovery.** The client learns there is a tool called `greet`.
+1. **Discovery.** The client learns there is a tool called `format_phone`.
 2. **Description.** The docstring becomes the tool's description. This is not
    documentation for you — it is how the model decides whether this is the
-   right tool to call. A vague docstring produces a tool the model misuses.
-3. **Schema.** The `name: str` annotation becomes the input schema, so the
+   right tool to call. A vague or misleading docstring produces a tool the
+   model misuses.
+3. **Schema.** The `number: str` annotation becomes the input schema, so the
    client knows to send one string argument.
 
-> **A note if you search for help.** Most MCP tutorials you will find say
+And the *body* does real work: strip everything that is not a digit
+(`re.sub(r"\D", "", ...)`), assume the US country code when the caller gave
+ten digits and no `+`, then return the result in E.164 form. Predictable,
+deterministic, and something a language model would not reliably get right
+on its own. That is the whole point of a tool.
+
+> **Why the assumption `+1`?** This lab targets a Contact Center audience
+> that mostly enters US numbers. It is a chapter-01 shortcut, called out in
+> chapter 02's resource. The exercises below invite you to change it.
+
+**Ask your client:** *"clean the number (415) 555-0101"*. It calls
+`format_phone`, the server strips the punctuation, and returns
+`+14155550101` back to the assistant, which shows it to you.
+
+> **A note if you search for help.** Most MCP tutorials say
 > `from mcp.server.fastmcp import FastMCP`. That class was renamed `MCPServer`
 > and moved to `mcp.server` in version 2 of the SDK. If you paste older code
-> and get `ModuleNotFoundError: No module named 'mcp.server.fastmcp'`, this is
-> why.
+> and get `ModuleNotFoundError: No module named 'mcp.server.fastmcp'`, this
+> is why.
 
-Chapter 01 already uses the same logging as the rest of the lab — every tool
-call writes a DEBUG line to stderr. The host displays it and nothing is written
-to disk. The full explanation is in chapter 02.
-
-Ask your client: *"greet Diego"*.
-
-![The assistant calling the greet tool and returning the greeting]()
-
-### Exercise: change what the assistant knows about `greet`
+### Exercise: change what the assistant knows about `format_phone`
 
 The docstring is the description sent to the MCP client. Change it in
 `mcp_servers/01_hello_mcp.py` from:
 
 ```python
-"""Greet someone by name. The first MCP tool an assistant can call."""
+"""Clean a phone number to E.164 form, e.g. +14155550101."""
 ```
 
-to a description with a more specific purpose, for example:
+to something more specific, for example:
 
 ```python
-"""Welcome a workshop participant by their first name."""
+"""Normalize a US phone number to E.164 for Contact Center use."""
 ```
 
 Run the client again:
@@ -367,60 +368,38 @@ Run the client again:
 python mcp_clients/01_hello_mcp_client.py
 ```
 
+Compare the line under `-- Tools --` before and after your edit. The
+function body did not change, so cleaning the same number still returns the
+same string. Only the assistant's understanding of *when to reach for the
+tool* changed.
 
-Compare the line under `-- Tools --` before and after your edit. The client now
-discovers the new description, which is the wording an assistant uses to decide
-whether `greet` fits a request. The function body did not change, so asking it
-to greet a name still returns the same `Hello, <name>` response. Try a few
-descriptions: one broad, one specific, and one that describes the wrong job.
-Notice how you have changed the tool's advertised behaviour without changing
-what the Python function actually does.
+### Exercise: change what `format_phone` does
 
-### Exercise: change what `greet` does
-
-Now change the function body in `mcp_servers/01_hello_mcp.py`. Replace:
-
-```python
-return f"Hello, {name}. Your first MCP tool just ran."
-```
-
-with a different result, for example:
-
-```python
-return f"Welcome to the workshop, {name}!"
-```
-
-Run the same client again:
-
-```powershell
-python mcp_clients/01_hello_mcp_client.py
-```
-
-This time the line under `-- Call: greet --` changes, because the server is now
-returning different data. The description tells the assistant when a tool might
-be useful; the function body determines what happens after the assistant calls
-it. Restore the original return value before moving on to chapter 02.
+Change the body of the function. For example, default to `+44` instead of
+`+1`, or refuse to prepend a country code at all and return `"+" + digits`
+regardless. Run the client again and see the result under `-- Call:
+format_phone --` change. The description tells the assistant when a tool
+might be useful; the function body determines what happens after the
+assistant calls it.
 
 ### Try it from the command line
 
-The test client starts the server for you, calls the tool, and shows you the
-result — no VS Code or bot needed, no credentials either:
+The test client starts the server for you, calls the tool, and shows you
+the result — no VS Code or bot needed, no credentials either:
 
 ```
 python mcp_clients/01_hello_mcp_client.py
 ```
 
-Add `--verbose` to see every JSON-RPC message flowing between client and server.
-This is the protocol that VS Code hides behind its UI — `initialize`,
-`tools/list`, `tools/call`, and their responses:
+Add `--verbose` to see every JSON-RPC message flowing between client and
+server. This is the protocol that VS Code hides behind its UI —
+`initialize`, `tools/list`, `tools/call`, and their responses:
 
 ```
 python mcp_clients/01_hello_mcp_client.py --verbose
 ```
 
-
-
-![run](C:\WorkRelated_LocalFiles\wx1Simple\WebexOne2026\webex-mcp-lab\lab-guide\images\verbose1.png)
+![verbose output showing the initialize handshake, tools/list, and tools/call frames](C:\WorkRelated_LocalFiles\wx1Simple\WebexOne2026\webex-mcp-lab\lab-guide\images\verbose1.png)
 
 
 
@@ -443,8 +422,8 @@ npx -y @modelcontextprotocol/inspector .venv/Scripts/python.exe mcp_servers/01_h
 
 Open the Inspector URL printed in the terminal, choose the **STDIO** transport,
 and click **Connect**. Use its Tools, Resources, Prompts, and Notifications
-tabs to explore the server. Select `greet` in Tools, enter a `name` value, and
-run it to see the result and its server log messages.
+tabs to explore the server. Select `format_phone` in Tools, enter a `number`
+value, and run it to see the result and its server log messages.
 
 Stop Inspector with `Ctrl+C`, then replace the final argument with the server
 for the chapter you are working on:
@@ -473,29 +452,49 @@ Center credentials before connecting. On macOS or Linux, replace
 
 **File: `mcp_servers/02_hello_resource.py`**
 
-No Webex, no network, no token — just like chapter 01. This time the server
-adds a **resource**: reference material that the client can attach to the
-conversation the way you would attach a file.
+Still no Webex, still no credentials. This chapter adds MCP's second
+primitive on top of the same tool: a **resource**.
 
 ```python
-@mcp.resource("lab://greeting-style")
-def greeting_style() -> str:
-    """How this organization prefers to greet people."""
-    return "Always use the person's first name. Keep it warm but professional. ..."
+@mcp.resource("lab://phone-format")
+def phone_format_rules() -> str:
+    return (
+        "Phone numbers must be in E.164 format:\n"
+        "- Start with a leading '+'.\n"
+        "- Country code, then subscriber number.\n"
+        "- Digits only. No spaces, dashes, or parentheses.\n"
+        "Examples: +14155550101 (US), +447700900123 (UK).\n"
+        "Note: format_phone assumes '+1' when given exactly 10 digits."
+    )
 ```
 
-A resource is not a tool. A tool is an action the *model* decides to take; a
-resource is context the *client* attaches — and because reading it changes
-nothing, the client can pull it in without asking you first. The URI
-(`lab://greeting-style`) is how a client refers to it. The scheme is yours to
-choose.
+A resource is not a tool. **A tool is an action the *model* decides to take;
+a resource is reference material the *client* attaches to the conversation,
+like dropping a spec sheet in front of the model.** Reading a resource
+changes nothing — which is exactly why the client can pull it in without
+asking you first.
 
-The `greet` tool from chapter 01 is carried forward. Its docstring now says
-"Read `lab://greeting-style` for the house rules" — that is enough for a model
-to pair the two automatically.
+Notice: nothing in this file *reads* the resource. `format_phone` does its
+job without it. The resource exists for the client, which fetches it and
+passes the text to the model as context. The scheme (`lab://`) and path
+(`phone-format`) are yours to choose — they need not correspond to anything
+on a network.
 
-Ask your client: *"greet Diego"* — and watch whether the model reads the
-resource before calling the tool.
+### Why the resource earns its keep
+
+|  | Without `lab://phone-format` | With `lab://phone-format` |
+|---|---|---|
+| The model knows what E.164 is | Only from training data — vague, error-prone | From an exact spec the client attached to the conversation |
+| The model can *explain* the format | Guesses, sometimes gets it wrong | Reads directly from the resource before answering |
+| The model handles a UK number | May forget `format_phone` defaults to `+1` for 10 digits | Sees the note in the resource and passes `+44...` explicitly |
+
+The tool implements the spec; the resource *is* the spec. That is the
+pattern to remember.
+
+**Ask your client:** *"clean these numbers: (415) 555-0101, 020 7946 0958"*.
+Watch whether the model reads the resource, notices the second number is UK,
+and re-formats it correctly (spoiler: it will not, unless you also tell it
+the country — which is the exercise below).
 
 ### Try it from the command line
 
@@ -505,8 +504,8 @@ python mcp_clients/02_hello_resource_client.py --verbose
 ```
 
 In verbose mode, two new JSON-RPC methods appear: `resources/list` and
-`resources/read`. The client discovers the resource, reads it, then calls the
-tool — so you see both primitives exercised in a single session.
+`resources/read`. The client discovers the resource, reads it, then calls
+the tool — so you see both primitives exercised in a single session.
 
 ---
 
@@ -515,38 +514,49 @@ tool — so you see both primitives exercised in a single session.
 **File: `mcp_servers/03_hello_prompt.py`**
 
 Still no Webex, still no credentials. This chapter adds the third and final
-MCP primitive: a **prompt**.
+MCP primitive on top of chapter 02: a **prompt**.
 
 ```python
 @mcp.prompt()
-def greet_team(team_name: str = "") -> str:
-    """Greet every member of a team one by one."""
+def clean_contact_list(raw_numbers: str = "") -> str:
     return (
-        f"Greet every member of the {team_name or '<team>'} team.\n"
-        "1. Read the lab://greeting-style resource and follow its rules.\n"
-        "2. For each person, call the greet tool with their first name.\n"
-        "3. Show me each greeting before moving to the next person."
+        "Clean these phone numbers to E.164 format:\n\n"
+        f"{raw_numbers or '<paste your numbers here, one per line>'}\n\n"
+        "1. Read the lab://phone-format resource first.\n"
+        "2. Call format_phone once for every line above and collect the results.\n"
+        "3. Show me the cleaned list. Flag any line that looks invalid."
     )
 ```
 
-A prompt is the one primitive a human triggers directly — usually from a slash
-command or a menu. What it returns is not an answer. It is the opening message
-of a conversation the model then carries out using the tools and resources
-from the same server.
+A prompt is the one primitive a human triggers directly — usually from a
+slash command or a menu. What it returns is not an answer. **It is the
+opening message the model sees, as if the user had typed it.** The model
+then carries out the workflow using the tools and resources from the same
+server.
 
-Notice the argument: `team_name`. Prompt arguments become fields the client
-asks the user to fill in before the workflow starts. That is the pattern:
-a prompt packages knowledge about *how a job should be done* so that a user
-can trigger it without knowing the steps.
+Notice the argument: `raw_numbers`. Prompt arguments become fields the
+client asks the user to fill in before the workflow starts. Paste a list of
+numbers, hit go, and the model reads the phone-format resource, calls
+`format_phone` on each line, and hands you back a cleaned list.
 
-All three primitives are now in one file, and the difference is *who reaches
-for them*:
+### Why the prompt earns its keep
 
-| Primitive | Who invokes it | What it is |
+|  | Without `clean_contact_list` | With `clean_contact_list` |
 |---|---|---|
-| tool | the model | an action |
-| resource | the client | reference material |
-| prompt | the **user** | a starting point |
+| Running the workflow | The user has to type the whole plan every time | The user picks it from a menu and pastes the list |
+| Consistency | Each run may skip a step or forget the resource | Every run reads the resource, iterates, and flags failures |
+| Discoverability | The user has to know the tool and resource exist | The prompt appears in the client's slash menu next to the server |
+
+### The three primitives, side by side
+
+All three primitives are now in one file, and the difference between them is
+*who reaches for them*:
+
+| Primitive | Who invokes it | What it is | Example in this chapter |
+|---|---|---|---|
+| tool | the model | an action | `format_phone(number)` |
+| resource | the client | reference material | `lab://phone-format` |
+| prompt | the **user** | a starting point | `clean_contact_list(raw_numbers)` |
 
 ### Try it from the command line
 
@@ -994,12 +1004,12 @@ when `--verbose` is on.
 
 ### `mcp_servers/01_hello_mcp_protocol_log.py` — old vs new logging
 
-This companion mirrors `01_hello_mcp.py` but demonstrates both logging
-approaches in the same tool:
+This companion demonstrates both logging approaches side by side in the same
+tool:
 
 ```python
-log.debug("greet called: name=%r", name)       # Python logging (durable)
-await ctx.log("debug", f"greet called: ...")    # ctx.log (deprecated)
+log.debug("tool called: arg=%r", arg)       # Python logging (durable)
+await ctx.log("debug", f"tool called: ...") # ctx.log (deprecated)
 ```
 
 Run it the same way:
@@ -1008,10 +1018,14 @@ Run it the same way:
 python mcp_servers/01_hello_mcp_protocol_log.py
 ```
 
-It starts identically to `01_hello_mcp.py`. The difference only shows when
-a client calls the `greet` tool: the Python log line always appears in stderr;
-the `ctx.log` line only appears if the client opted in to protocol-level
+It starts identically to `01_hello_mcp.py`. The difference only shows when a
+client calls its tool: the Python log line always appears in stderr; the
+`ctx.log` line only appears if the client opted in to protocol-level
 logging.
+
+> **Note:** the protocol-log companion is a legacy demo and still uses the
+> lab's original example tool; the mechanism it illustrates (`log.debug` vs.
+> `ctx.log`) is what matters, not the tool name.
 
 ### What to look for in `--verbose` output
 

@@ -6,43 +6,50 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 """
 # Step 03 - the third primitive: a prompt (a workflow the user triggers).
 
+import re
 import sys
 from mcp.server import MCPServer
 
 mcp = MCPServer("webex-mcp-lab-03")
 
 
+# WHO triggers this? The USER, from a slash command or menu in their client.
+# The prompt argument (raw_numbers) becomes a field the client asks the user
+# to fill in. WHAT we return here is not an answer - it becomes the opening
+# message the model sees, as if the user had typed it. The model then reads
+# lab://phone-format and calls format_phone once per line to carry it out.
 @mcp.prompt()
-def greet_team(team_name: str = "") -> str:
-    """Greet every member of a team one by one.
-
-    Prompt arguments become fields the client asks the user to fill in.
-    What this returns is not an answer - it is the opening message of a
-    workflow the model carries out with the tools and resources below.
-    """
+def clean_contact_list(raw_numbers: str = "") -> str:
     return (
-        f"Greet every member of the {team_name or '<team>'} team.\n"
-        "\n"
-        "1. Read the lab://greeting-style resource and follow its rules.\n"
-        "2. For each person, call the greet tool with their first name.\n"
-        "3. Show me each greeting before moving to the next person."
+        "Clean these phone numbers to E.164 format:\n\n"
+        f"{raw_numbers or '<paste your numbers here, one per line>'}\n\n"
+        "1. Read the lab://phone-format resource first.\n"
+        "2. Call format_phone once for every line above and collect the results.\n"
+        "3. Show me the cleaned list. Flag any line that looks invalid."
     )
 
 
-@mcp.resource("lab://greeting-style")
-def greeting_style() -> str:
-    """How this organization prefers to greet people."""
+# WHO reads this? The CLIENT, which passes the text to the model as context.
+@mcp.resource("lab://phone-format")
+def phone_format_rules() -> str:
     return (
-        "Always use the person's first name. "
-        "Keep it warm but professional. "
-        "End with a note about the workshop."
+        "Phone numbers must be in E.164 format:\n"
+        "- Start with a leading '+'.\n"
+        "- Country code, then subscriber number.\n"
+        "- Digits only. No spaces, dashes, or parentheses.\n"
+        "Examples: +14155550101 (US), +447700900123 (UK).\n"
+        "Note: format_phone assumes '+1' when given exactly 10 digits."
     )
 
 
+# WHO calls this? The MODEL, once per number in the user's list.
 @mcp.tool()
-async def greet(name: str) -> str:
-    """Greet someone by name. Read lab://greeting-style for the house rules."""
-    return f"Hello, {name}! Welcome to the Webex One 2026 workshop."
+async def format_phone(number: str) -> str:
+    """Clean a phone number to E.164 form. See lab://phone-format for the rules."""
+    digits = re.sub(r"\D", "", number)
+    if not number.startswith("+") and len(digits) == 10:
+        digits = "1" + digits
+    return "+" + digits
 
 
 if __name__ == "__main__":
