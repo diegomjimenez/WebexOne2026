@@ -13,39 +13,27 @@ finish.
 
 ## Before anything else: how this lab works
 
-**Every step is a complete, standalone program.** There are eight of them:
+**Every step is a complete, standalone program.** There are six of them (plus a modular variant):
 
 ```
 webex-mcp-lab/
     mcp_servers/
-        01_hello_mcp.py               the smallest server (no network, no token)
-        01_hello_mcp_protocol_log.py  same server, with deprecated ctx.log()
-        02_hello_resource.py          adds a resource: org phone policy (no network)
-        03_hello_prompt.py            adds a prompt: apply the policy to a list (no network)
-        04_list_books.py              first real Contact Center call
-        05_list_entries.py            id chaining: use a book id to list entries
-        06_write_books.py             writing: create a book, add contacts
-        07_full_server.py             capstone: prompt + resource + tools on the API
-        07_modular/                   the same server, built to grow
-        _check.py                     quick credential check helper
-    mcp_clients/
-        01_hello_mcp_client.py        test client for 01 (no credentials needed)
-        02_hello_resource_client.py   test client for 02 (no credentials needed)
-        03_hello_prompt_client.py     test client for 03 (no credentials needed)
-        04_list_books_client.py       test client for 04
-        05_list_entries_client.py     test client for 05 (chains book id)
-        06_write_books_client.py      test client for 06
-        run_client.py                 small shared runner used by every client
-        _verbose.py                   advanced: JSON-RPC frame tap for --verbose
-    lab-guide/                        this guide and screenshots
-    .env                              your credentials (git-ignored)
-    requirements.txt                  pip dependencies
+        01_hello_mcp.py                  the smallest server (no network, no token)
+        01_hello_mcp_protocol_log.py     same server, with deprecated ctx.log()
+        02_hello_resource_prompt.py      all three primitives (no network, no token)
+        03_read_books.py                 reading: list address books, list entries
+        04_write_books.py                writing: create a book, add contacts
+        05_delete_books.py               deleting: remove a book or entry (elicitation)
+        06_full_server.py                capstone: prompt + resource + tools on the API
+        07_modular/                      the same server, built to grow
+    lab-guide/                           this guide and screenshots
+    .env                                 your credentials (git-ignored)
+    requirements.txt                     pip dependencies
 ```
 
-Each server runs on its own. `05_resource.py` does not import `02_list_books.py`,
-and none of them import a shared helper module. That means a step never breaks
-because you skipped the one before it — each chapter carries a full copy of the
-tools it has reached so far.
+Each server runs on its own. `05_delete_books.py` does not import
+`03_read_books.py`, and none of them import a shared helper module. That means
+a step never breaks because you skipped the one before it.
 
 **Arrived late?** Good news: you have missed nothing you cannot recover in two
 minutes. Do the setup chapter below, then open whichever file the room is
@@ -59,21 +47,10 @@ top to bottom without following an import anywhere else.
 
 ## Setup
 
-You need two things: Python 3.10 or newer, and — from chapter 04 onward — access
-to a Webex **Contact Center** organization. Chapters 01–03 need neither a token
+You need two things: Python 3.10 or newer, and — from chapter 03 onward — access
+to a Webex **Contact Center** organization. Chapters 01–02 need neither a token
 nor a network.
 
-
-!!!!!!!!
-do we really neeed this below ??
-!!!!!!!!
-
-
-> **Read this before you start.** Every chapter except 01 talks to Webex Contact
-> Center. If you do not have a Contact Center organization and a token with the
-> `cjp:config_read` and `cjp:config_write` scopes, you can still do chapter 01,
-> but 02–07 will refuse to start and tell you which credential is missing. Decide
-> now which path you are on so you are not surprised later.
 
 ### 1. Create and activate a virtual environment
 
@@ -122,11 +99,6 @@ You need three values:
   centre you belong to, e.g. `https://api.wxcc-us1.cisco.com` (or `eu1`, `anz1`, …).
 
 
-!!!!!!!!
-do we really neeed the above??
-!!!!!!!!
-
-
 ### 4. Put the credentials in a file
 
 Copy the example file and paste your values in:
@@ -165,18 +137,18 @@ python mcp_servers/01_hello_mcp.py
 It prints one line — `webex-mcp-lab-01 running on stdio ...` — and then appears
 to hang. **That is correct.** The banner goes to stderr; the server then waits
 on stdin/stdout for a client to connect, so there is nothing more to print until
-one does. Press `Ctrl+C` to stop it. Chapters 01–03 need no credentials, so
+one does. Press `Ctrl+C` to stop it. Chapters 01–02 need no credentials, so
 this works even before you have filled in `.env`.
 
 ### What you need for which chapter
 
 | Chapter | What you need |
 |---|---|
-| 01 – 03 | Nothing. No token, no network. |
-| 04 – 07 | A Webex **Contact Center** organization, a token with the `cjp:config_read` and `cjp:config_write` scopes, plus `WEBEX_ORG_ID` and `WXCC_CONFIG_API_BASE` in your `.env`. |
+| 01 – 02 | Nothing. No token, no network. |
+| 03 – 06 | A Webex **Contact Center** organization, a token with the `cjp:config_read` and `cjp:config_write` scopes, plus `WEBEX_ORG_ID` and `WXCC_CONFIG_API_BASE` in your `.env`. |
 
 **If you do not have a Contact Center organization, you can still complete
-chapters 01–03** and read the rest. Those three chapters teach every MCP
+chapters 01–02** and read the rest. Those two chapters teach every MCP
 primitive without a network. Every other chapter needs the credentials above,
 and each one names the missing variable at startup rather than failing later
 with an opaque HTTP error.
@@ -189,16 +161,25 @@ A server with no client does nothing. You need an MCP host — the application
 that starts your server, shows you its tools, and asks for your approval before
 anything is called.
 
-This lab uses two, and you only need one of them.
+This lab recommends **VS Code with your own OpenAI key** (BYOK). It supports
+every MCP primitive — tools, resources, and prompts — without a GitHub account
+or Copilot subscription. You only need an OpenAI API key.
 
-!!!!
-vs code could be removed
-!!!!!
+### VS Code with Bring Your Own Key (recommended)
 
+**Requirements:** VS Code 1.122 or newer, and an OpenAI API key.
 
-### Visual Studio Code
+**Step 1 — Add your OpenAI model.** Open the Command Palette
+(`Ctrl+Shift+P` / `Cmd+Shift+P`) and run **Chat: Manage Language Models**.
+Click **Add Models**, select **OpenAI**, paste your API key, and pick a model
+(e.g. `gpt-4o`). The Chat view appears immediately — no GitHub sign-in needed.
 
-Create `.vscode/mcp.json` in your workspace:
+> **First-time note.** VS Code may ask you to assign a model for utility tasks
+> (title generation, etc.). Point it at the same `gpt-4o` model — this is a
+> one-time prompt.
+
+**Step 2 — Register the MCP server.** Create `.vscode/mcp.json` in the lab
+workspace:
 
 ```json
 {
@@ -217,16 +198,32 @@ the lab folder so the server finds your `.env`. On macOS and Linux the
 interpreter is `.venv/bin/python` instead of `.venv/Scripts/python.exe`.
 
 Replace both paths with your own, and change the script name as you work through
-the chapters (for the modular finale, point `args` at `mcp_servers/07_modular/server.py`).
-Use forward slashes on every platform, including Windows. No environment-file
-flag is needed — the server loads `.env` itself.
+the chapters (for the modular finale, point `args` at
+`mcp_servers/07_modular/server.py`). Use forward slashes on every platform,
+including Windows. No environment-file flag is needed — the server loads `.env`
+itself.
+
+**Step 3 — Use it.** Open the Chat view and ask:
+*"clean the number (415) 555-0101"*. VS Code starts the server, discovers
+`format_phone`, and asks for your approval before calling it.
+
+**How to access each MCP primitive in VS Code:**
+
+| Primitive | How to access |
+|---|---|
+| **Tools** | Just ask in chat — the model discovers and calls them automatically |
+| **Resources** | Click **Add Context** > **MCP Resources** in the Chat view |
+| **Prompts** | Type `/. ` (slash-dot-space) in the chat input to see available prompts |
 
 ![Visual Studio Code showing the webex-mcp-lab server connected, with the format_phone tool listed in the tool picker]
 
-### Codex CLI in Visual Studio Code
+### Codex CLI (alternative — tools only)
 
-You can also run OpenAI Codex CLI from the integrated terminal in Visual Studio
-Code. Install it, then authenticate with your OpenAI API key:
+OpenAI Codex CLI works as an alternative client, but **it only supports tools**.
+Resources and prompts are not available in Codex — chapters 02 and 03 cannot be
+fully demonstrated with this client.
+
+Install and authenticate from the VS Code terminal:
 
 ```powershell
 npm install -g @openai/codex
@@ -236,12 +233,10 @@ codex login status
 ```
 
 Type your real key directly in the terminal; do not add it to this guide, source
-control, or `.vscode/mcp.json`. `codex login status` should report that you are
-logged in using an API key.
+control, or `.vscode/mcp.json`.
 
-Codex is separate from the VS Code MCP host and does not read
-`.vscode/mcp.json`. Register the server in `C:/Users/<you>/.codex/config.toml`:
-This is from dcloud -> C:\Users\Administrator.DCLOUD\.codex\config.toml
+Codex does not read `.vscode/mcp.json`. Register the server in
+`C:/Users/<you>/.codex/config.toml`:
 
 ```toml
 [mcp_servers.webex-mcp-lab]
@@ -250,49 +245,24 @@ args = ["mcp_servers/01_hello_mcp.py"]
 cwd = "C:/absolute/path/to/webex-mcp-lab"
 ```
 
-![toml](C:\WorkRelated_LocalFiles\wx1Simple\WebexOne2026\webex-mcp-lab\lab-guide\images\config.toml.png)
-
-
-example 
-```
-[mcp_servers.webex-mcp-lab]
-enabled = true
-command = "C:/WebexOne/31.08.2026/WebexOne2026/webex-mcp-lab/.venv/Scripts/python.exe"
-args = ["01_hello_mcp.py"]
-cwd = "C:/WebexOne/31.08.2026/WebexOne2026/webex-mcp-lab/mcp_servers"
-```
-
-
-Replace the paths, then verify the registration and start Codex from the VS Code
-terminal:
+Replace the paths, then verify and start:
 
 ```powershell
 codex mcp list
 codex
 ```
 
-example
-
-```
-PS C:\WebexOne\31.08.2026\WebexOne2026> codex mcp list
-Name           Command                                                                                                        Args             Env                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         Cwd                                                Status   Auth       
-node_repl      C:\Users\Administrator.DCLOUD\AppData\Local\OpenAI\Codex\runtimes\cua_node\950613ca46815e82\bin\node_repl.exe  -                BROWSER_USE_AVAILABLE_BACKENDS=*****, BROWSER_USE_CODEX_APP_BUILD_FLAVOR=*****, BROWSER_USE_CODEX_APP_VERSION=*****, BROWSER_USE_TINYSKY_ENABLED=*****, CODEX_CLI_PATH=*****, CODEX_HOME=*****, NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER=*****, NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME=*****, NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS=*****, NODE_REPL_NODE_MODULE_DIRS=*****, NODE_REPL_NODE_PATH=*****, NODE_REPL_TRUSTED_CODE_PATHS=*****, NODE_REPL_TRUSTED_SERVICES=*****, SKY_CUA_NATIVE_PIPE=*****, SKY_CUA_NATIVE_PIPE_DIRECTORY=*****  -                                                  enabled  Unsupported
-webex-mcp-lab  C:/WebexOne/31.08.2026/WebexOne2026/webex-mcp-lab/.venv/Scripts/python.exe                                     01_hello_mcp.py  -                                                                                                                   
-```
-
-
 Ask Codex to `use MCP to clean the number (415) 555-0101`. It starts the
 server, discovers `format_phone`, and asks for approval before calling it.
-For the complete Codex walkthrough and log locations, see
-[Using Codex as an MCP client](codex-mcp-client.md).
 
-### The Webex bot client
+### Which client supports what
 
-The alternative host is a small MCP client that runs inside a Webex bot, so the
-conversation with your server happens in a Webex space. Configuration is the
-same shape — a command, its arguments, and the environment.
-
-![The Webex bot MCP client listing the tools offered by the lab server inside a Webex space]()
+| | VS Code BYOK | Codex CLI | MCP Inspector |
+|---|---|---|---|
+| **Tools** | yes | yes | yes |
+| **Resources** | Add Context menu | discoverable, model may skip | click to read |
+| **Prompts** | `/. ` slash commands | **not supported** | Prompts tab |
+| **Best for** | chapters 01–06 | chapters 01, 03–06 | any chapter (debug) |
 
 ---
 
@@ -431,172 +401,105 @@ for the chapter you are working on:
 | Chapter | Inspector command |
 |---|---|
 | 01 | `npx -y @modelcontextprotocol/inspector .venv/Scripts/python.exe mcp_servers/01_hello_mcp.py` |
-| 01 logging companion | `npx -y @modelcontextprotocol/inspector .venv/Scripts/python.exe mcp_servers/01_hello_mcp_protocol_log.py` |
-| 02 | `npx -y @modelcontextprotocol/inspector .venv/Scripts/python.exe mcp_servers/02_hello_resource.py` |
-| 03 | `npx -y @modelcontextprotocol/inspector .venv/Scripts/python.exe mcp_servers/03_hello_prompt.py` |
-| 04 | `npx -y @modelcontextprotocol/inspector .venv/Scripts/python.exe mcp_servers/04_list_books.py` |
-| 05 | `npx -y @modelcontextprotocol/inspector .venv/Scripts/python.exe mcp_servers/05_list_entries.py` |
-| 06 | `npx -y @modelcontextprotocol/inspector .venv/Scripts/python.exe mcp_servers/06_write_books.py` |
-| 07 | `npx -y @modelcontextprotocol/inspector .venv/Scripts/python.exe mcp_servers/07_full_server.py` |
+| 01 logging | `npx -y @modelcontextprotocol/inspector .venv/Scripts/python.exe mcp_servers/01_hello_mcp_protocol_log.py` |
+| 02 | `npx -y @modelcontextprotocol/inspector .venv/Scripts/python.exe mcp_servers/02_hello_resource_prompt.py` |
+| 03 | `npx -y @modelcontextprotocol/inspector .venv/Scripts/python.exe mcp_servers/03_read_books.py` |
+| 04 | `npx -y @modelcontextprotocol/inspector .venv/Scripts/python.exe mcp_servers/04_write_books.py` |
+| 05 | `npx -y @modelcontextprotocol/inspector .venv/Scripts/python.exe mcp_servers/05_delete_books.py` |
+| 06 | `npx -y @modelcontextprotocol/inspector .venv/Scripts/python.exe mcp_servers/06_full_server.py` |
 | 07m | `npx -y @modelcontextprotocol/inspector .venv/Scripts/python.exe mcp_servers/07_modular/server.py` |
 
-Chapters 01–03 and the logging companion need no credentials. Chapters 04-07 load
+Chapters 01–02 and the logging companion need no credentials. Chapters 03-06 load
 the same `.env` file used by the other clients, so fill in the Webex Contact
 Center credentials before connecting. On macOS or Linux, replace
 `.venv/Scripts/python.exe` with `.venv/bin/python`.
 
-
 ---
 
-## Chapter 02 — the resource primitive (hello, no network)
+## Chapter 02 — all three primitives, no network
 
-**File: `mcp_servers/02_hello_resource.py`**
+**File: `mcp_servers/02_hello_resource_prompt.py`**
 
-Still no Webex, still no credentials. This chapter adds MCP's second
-primitive on top of the same tool: a **resource**.
+Still no Webex, still no credentials. This chapter puts all three MCP
+primitives — tool, resource, and prompt — into one short file, using a
+word-count example that has nothing to do with phones.
 
 ```python
-@mcp.resource("lab://phone-policy")
-def phone_policy() -> str:
+@mcp.tool()
+async def count_words(text: str) -> dict:
+    """Count the words and characters in a piece of text."""
+    words = text.split()
+    return {"words": len(words), "characters": len(text)}
+```
+
+A tool is an action the model calls. `count_words` counts — that is all it
+knows. It has no idea what the limits should be, or which words are banned.
+
+```python
+@mcp.resource("lab://greeting-rules")
+def greeting_rules() -> str:
     return (
-        "Contact Center phone-number policy for this organization:\n"
-        "\n"
-        "1. Allowed country codes: +1 (US/Canada), +44 (UK), +49 (Germany).\n"
-        "   Numbers with any other country code MUST be refused.\n"
-        "\n"
-        "2. The +1-555-0100 through +1-555-0199 range is reserved for\n"
-        "   internal testing. Refuse any number in that range.\n"
-        "\n"
-        "3. Normalize with format_phone before checking rules 1 and 2."
+        "Rules for agent chat greetings:\n"
+        "1. 12 words maximum.\n"
+        "2. Must include the agent's first name.\n"
+        "3. Never use 'ASAP' or 'obviously'.\n"
     )
 ```
 
-A resource is not a tool. **A tool is an action the *model* decides to
-take; a resource is context the *client* attaches to the conversation,
-like handing the model a house rulebook before it starts work.** Reading a
-resource changes nothing on the server — which is exactly why the client
-can pull it in without asking you first.
-
-Notice what's happening here: **the tool doesn't know these rules exist.**
-`format_phone` mechanically normalizes any digits you give it, French or
-otherwise. The policy lives entirely in the resource, and it only shapes
-behaviour because the client attaches it and the model reads it. That's
-the whole shape of a resource: **policy the tool cannot enforce alone.**
-
-### Why the resource earns its keep
-
-Try each of these against a client that has attached the resource, and one
-that hasn't. The tool call returns the same value in both columns; what
-changes is what the model *decides* to do next.
-
-|  | Without `lab://phone-policy` | With `lab://phone-policy` |
-|---|---|---|
-| `format_phone("+33 1 42 68 53 00")` | Model returns `"+33142685300"` and calls it a win | Model reads the policy, sees +33 is not allowed, **refuses and asks for a supported number** |
-| `format_phone("415-555-0142")` | Model returns `"+14155550142"` and hands it back | Model reads the policy, spots the test range, **refuses and flags it as reserved** |
-| Editing the resource to also allow +33 | Nothing changes; tool code is unchanged | The model's decisions change on the next `resources/read`, without any code deploy |
-
-The tool implements the mechanics; the resource carries the policy. That
-is the pattern to remember.
-
-> **Soft vs. hard enforcement.** Because the policy lives in text the
-> model reads, this is *soft* enforcement — a determined or overconfident
-> model can still ignore it. That's a real trade-off, not a bug. Chapter
-> 06 shows the other end: hard invariants that live in the tool code
-> itself, so no amount of coaxing can bypass them. Both patterns have a
-> place; you'll typically use resources for policies that change often and
-> tool-code for invariants that must never change.
-
-**Ask your client:** *"clean these numbers: (415) 555-0101, +33 1 42 68 53
-00, 415-555-0142"*. If the client has attached the resource, you should
-see one accepted number and two refusals with reasons.
-
-### Try it from the command line
-
-```
-python mcp_clients/02_hello_resource_client.py
-python mcp_clients/02_hello_resource_client.py --verbose
-```
-
-In verbose mode, two new JSON-RPC methods appear: `resources/list` and
-`resources/read`. The client discovers the resource, reads it, then calls
-the tool — so you see both primitives exercised in a single session.
-
----
-
-## Chapter 03 — the prompt primitive (hello, no network)
-
-**File: `mcp_servers/03_hello_prompt.py`**
-
-Still no Webex, still no credentials. This chapter adds the third and final
-MCP primitive on top of chapter 02: a **prompt**.
+A resource is context the client attaches, like handing the model a
+rulebook. **The tool cannot know these rules.** `count_words` returns 7
+for any 7-word text; only the resource says the limit is 12 and "ASAP" is
+banned. That is why a resource matters: it carries rules the tool itself
+does not encode.
 
 ```python
 @mcp.prompt()
-def clean_contact_list(raw_numbers: str = "") -> str:
+def review_greeting(greeting: str = "") -> str:
     return (
-        "Review these phone numbers against our policy:\n\n"
-        f"{raw_numbers or '<paste numbers here, one per line - policy will be applied>'}\n\n"
-        "1. Read the lab://phone-policy resource for the org rules.\n"
-        "2. Call format_phone once for every line to normalize it.\n"
-        "3. Reject any number that violates rule 1 (country) or rule 2 (test range).\n"
-        "4. Return two lists back to me: accepted (E.164) and rejected (with reason)."
+        f"Review this agent greeting:\n\n"
+        f"{greeting or '<paste a greeting here>'}\n\n"
+        "1. Read the lab://greeting-rules resource for the org rules.\n"
+        "2. Call count_words to measure the greeting.\n"
+        "3. Tell me pass or fail, and why."
     )
 ```
 
-A prompt is the one primitive a human triggers directly — usually from a
-slash command or a menu. What it returns is not an answer. **It is the
-opening message the model sees, as if the user had typed it.** The model
-then carries out the workflow using the tools and resources from the same
-server.
-
-Notice the argument: `raw_numbers`. Prompt arguments become fields the
-client asks the user to fill in before the workflow starts. Paste a list of
-numbers, hit go, and the model reads the policy, normalizes each number
-with `format_phone`, then hands you back **two** lists — the numbers that
-passed the policy and the numbers that were rejected, with the reason next
-to each rejection.
-
-### Why the prompt earns its keep
-
-|  | Without `clean_contact_list` | With `clean_contact_list` |
-|---|---|---|
-| Running the workflow | The user has to type the whole plan every time | The user picks it from a menu and pastes the list |
-| Consistency | Each run may skip a step or forget the resource | Every run reads the policy, iterates, and partitions |
-| Output shape | Bare list of cleaned numbers | Two lists: **accepted** (E.164) and **rejected** (with reason) |
-| Discoverability | The user has to know the tool and resource exist | The prompt appears in the client's slash menu next to the server |
+A prompt is the one primitive a human triggers directly — from a slash
+command or menu. It returns the opening message the model sees, wiring the
+resource and the tool into a single review workflow.
 
 ### The three primitives, side by side
 
-All three primitives are now in one file, and the difference between them is
-*who reaches for them*:
-
-| Primitive | Who invokes it | What it is | Example in this chapter |
+| Primitive | Who invokes it | What it is | Example |
 |---|---|---|---|
-| tool | the model | an action | `format_phone(number)` |
-| resource | the client | policy / reference material | `lab://phone-policy` |
-| prompt | the **user** | a starting point | `clean_contact_list(raw_numbers)` |
+| tool | the model | an action | `count_words(text)` |
+| resource | the client | policy / reference material | `lab://greeting-rules` |
+| prompt | the **user** | a starting point | `review_greeting(greeting)` |
 
-### Try it from the command line
+### The A/B test
 
-```
-python mcp_clients/03_hello_prompt_client.py
-python mcp_clients/03_hello_prompt_client.py --verbose
-```
+Try the same question — *"is this greeting OK: Hi, I'm Sam — how can I
+help you today?"* — with and without the resource attached:
 
-Two more new JSON-RPC methods: `prompts/list` and `prompts/get`. The verbose
-output now shows all three MCP primitives exercised in a single session.
+|  | Without `lab://greeting-rules` | With `lab://greeting-rules` |
+|---|---|---|
+| What the model checks | invents its own standards | applies the 12-word max, first-name rule, and banned words |
+| Adding "ASAP" to the greeting | model probably accepts it | model flags the banned word |
+
+> **In VS Code:** Click **Add Context** > **MCP Resources** and select
+> `lab://greeting-rules`. Or type `/. ` to invoke `review_greeting` from
+> the prompt menu.
 
 ---
 
-## Chapter 04 — the first real Webex call: list address books
+## Chapter 03 — the first real Webex call: read address books
 
-**File: `mcp_servers/04_list_books.py`**
+**File: `mcp_servers/03_read_books.py`**
 
-Now the tool talks to Webex Contact Center and hands back a real collection: the
-address books configured in your organization.
+Now the tool talks to Webex Contact Center. This chapter exposes two read-only
+tools: `list_address_books` and `list_entries`.
 
-Two things arrive in this step. The first is the credential check, done once at
-startup and naming any variable that is missing:
+The credential check runs once at startup and names any variable that is missing:
 
 ```python
 for _name, _value in (
@@ -609,11 +512,11 @@ for _name, _value in (
 ```
 
 Checking at startup rather than inside the tool is deliberate. A server that
-starts fine and then fails on every call is diagnosed by reading HTTP status
-codes. A server that refuses to start and names the missing variable is
-diagnosed by reading one line.
+refuses to start and names the missing variable is diagnosed by reading one
+line. A server that starts fine and then fails on every call requires HTTP
+status codes.
 
-The second is the shape of the result:
+### Shaping what the model sees
 
 ```python
 books = [
@@ -626,89 +529,25 @@ return {"count": len(books), "address_books": books}
 Webex wraps collections in a `data` key and each record has many fields. We
 unwrap it and keep three, because **everything a tool returns is read by a
 language model** — it becomes context the model has to process. The `id` is
-there because the next chapter needs it. And the token, obviously, never appears
+there because later chapters need it. And the token, obviously, never appears
 in the result.
 
-Ask your client: *"list my Contact Center address books"*.
+### Id chaining
 
-![The assistant listing address books returned by the list_address_books tool](images/02-list-books-vscode.png)
-
-### Try it from the command line
-
-```
-python mcp_clients/04_list_books_client.py
-python mcp_clients/04_list_books_client.py --verbose
-```
-
-The verbose output is the same shape as chapter 01, but now the `tools/call`
-result contains real API data — the address books in your organization.
-
-### Watching the server work
-
-Run `mcp_servers/02_list_books.py` and call the tool, and you will see more than the banner:
-
-```
-2026-08-28 18:20:01,442 DEBUG webex: list_address_books: GET https://api.wxcc-us1.cisco.com/organization/<org>/v3/address-book
-2026-08-28 18:20:01,905 DEBUG webex: list_address_books: Webex responded HTTP 200
-```
-
-Logs are configured in two lines at the top of every server:
-
-```python
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-log = logging.getLogger("webex")
-```
-
-They go to **stderr only** — never stdout, which carries the MCP protocol — and
-the host (VS Code, the bot, your terminal) shows them; nothing is written to
-disk. The token is never logged. The same two lines sit in every chapter.
+Each book in the result has an `id`. `list_entries(address_book_id)` takes
+that id and returns the contacts inside that book — carrying the output of
+one call into the input of the next. Ask your client: *"list my address
+books, then show me the entries in the first one"* — and watch the model
+chain the id from the first call into the second.
 
 ---
 
-## Chapter 05 — id chaining: list the entries inside a book
+## Chapter 04 — writing: create a book, then fill it
 
-**File: `mcp_servers/05_list_entries.py`**
+**File: `mcp_servers/04_write_books.py`**
 
-Chapter 04 listed address books. Each book in the result has an `id`. This
-chapter uses that id to look inside a book and list its contacts — carrying the
-output of one call into the input of the next.
-
-Nothing is written. Both tools here are pure reads. The idea is to practise
-chaining before mutation enters the picture in chapter 06.
-
-The server exposes two tools:
-
-- `list_address_books` — the same read-only tool from chapter 04, carried
-  forward so this chapter is standalone.
-- `list_entries(address_book_id, search="")` — takes the `id` you got from
-  listing books and returns the contacts inside that book.
-
-Ask your client: *"list my address books, then show me the entries in the first
-one"* — and watch the model carry the id from the first call into the second.
-
-### Try it from the command line
-
-```
-python mcp_clients/05_list_entries_client.py
-python mcp_clients/05_list_entries_client.py --verbose
-```
-
-The client does the chaining for you: it calls `list_address_books`, takes the
-first book's id, and passes it to `list_entries`. In verbose mode you see two
-`tools/call` frames on the wire, the second carrying the id from the first
-response — chaining made visible at the protocol level.
-
-If your organization has no address books yet, the client reports there is
-nothing to chain and exits cleanly.
-
----
-
-## Chapter 06 — writing: create a book, then fill it
-
-**File: `mcp_servers/06_write_books.py`**
-
-Everything so far only read. This chapter writes, and it introduces two ideas
-at once.
+This chapter writes. It exposes exactly two tools: `create_address_book` and
+`add_entry`. There are no read tools here — listing is chapter 03's job.
 
 ### Who asks permission
 
@@ -728,20 +567,6 @@ is entered, your MCP client shows you the tool name and its arguments and waits
 for you to approve. Every MCP host does this. It is part of the protocol's
 design, not a feature of any particular server.
 
-![The Visual Studio Code approval prompt showing the create_address_book tool with its arguments, waiting for the user to allow or deny](images/03-approval-vscode.png)
-
-So a server that builds its own approval step is not adding safety. It is adding
-a second dialog in front of the first one, and teaching its users that clicking
-through dialogs is normal. The host already asked. Trust it, and keep your tool
-honest about what it does.
-
-**There are also no delete tools in this file** — not because deleting is hard,
-but because address books are shared configuration on a shared organization. A
-mistaken create leaves a stray book for an administrator to remove; a mistaken
-delete removes a book and every contact in it. Those are not comparable, so the
-verb is simply absent. Deciding which operations a tool exposes *at all* is a
-more effective control than any confirmation flow.
-
 ### Chaining calls
 
 `create_address_book` returns the new book's id; `add_entry` takes that id as
@@ -755,9 +580,8 @@ return {"created": True, "address_book_id": book.get("id"), "name": book.get("na
 async def add_entry(address_book_id: str, name: str, number: str) -> dict:
 ```
 
-Watch the model carry the id from the first call into the second. That is most
-of what "using tools together" means, and it is why the create result puts the
-id front and centre.
+Watch the model carry the id from the first call into the second. The create
+result puts the id front and centre precisely so the next tool can use it.
 
 The other thing worth copying is the failure handling — every branch of `_fail`
 returns a sentence, not an exception, so one bad call never takes the server
@@ -767,38 +591,64 @@ Ask your client: *"create an address book called Lab Contacts, then add Acme
 Reception on +14155550101"* — and watch for the approval prompt before anything
 is written.
 
-![The assistant creating an address book and adding a contact through the Contact Center tools](images/03-write-books-vscode.png)
+---
 
-### Try it from the command line
+## Chapter 05 — deleting with a safety net: elicitation
 
+**File: `mcp_servers/05_delete_books.py`**
+
+Chapter 04 trusted the host to ask permission. This chapter explores what
+happens when the server itself needs to ask a question mid-call. The MCP
+protocol calls this **elicitation**: the server pauses, sends a form to the
+user, and resumes based on the answer.
+
+The server exposes exactly two tools: `delete_address_book` and `delete_entry`.
+There are no read tools — the id to delete comes from the **create → fill →
+delete** narrative. You already have a fresh id in the transcript from chapters
+03 and 04.
+
+> **Tip:** If you want to list address books alongside deletion, register
+> `03_read_books.py` and `05_delete_books.py` as two separate MCP servers in
+> your client. One server lists, the other deletes.
+
+### The resolver pattern
+
+```python
+class Confirm(BaseModel):
+    ok: bool
+
+async def confirm_delete_book(address_book_id: str) -> Elicit[Confirm]:
+    return Elicit(f"Delete address book '{address_book_id}'? This cannot be undone.", Confirm)
 ```
-python mcp_clients/06_write_books_client.py
-python mcp_clients/06_write_books_client.py --verbose
-```
 
-The client lists all four tools but only calls `list_address_books` — it is
-read-only by design, so running it cannot modify your organization. In verbose
-mode, notice that `tools/list` now returns four tools instead of one.
+The resolver runs **before** the tool body. The user sees a form with one
+boolean field. Three outcomes are possible:
+
+| Outcome | What happens |
+|---|---|
+| `AcceptedElicitation(ok=True)` | DELETE fires, item is removed |
+| `AcceptedElicitation(ok=False)` | User said "no" — tool body skips the HTTP call |
+| `DeclinedElicitation` / `CancelledElicitation` | User dismissed — tool body skips the HTTP call |
+
+This is different from the host's built-in approval. The host asks *"should I
+call this tool at all?"*. Elicitation asks *"I am inside the tool — are you
+sure about this specific action?"*. The two are complementary.
 
 ---
 
-## Chapter 07 — capstone: prompt + resource + tools on the real API
+## Chapter 06 — capstone: prompt + resource + tools on the real API
 
-**File: `mcp_servers/07_full_server.py`**
+**File: `mcp_servers/06_full_server.py`**
 
-Every primitive you have learned — tool, resource, prompt — cooperates in one
-file, on the real Contact Center API. The capstone registers:
+Every primitive you have learned — tool, resource, prompt, and elicitation —
+cooperates in one file, on the real Contact Center API. The capstone registers:
 
 - **One prompt** (`set_up_address_book`) — a workflow that orchestrates
   everything below.
-- **One resource** (`webex://address-books/conventions`) — the house style
-  guide that shapes how the tools are used.
-- **Three tools** — `list_address_books`, `create_address_book`, and
-  `add_entry`.
-
-There is no `list_entries` tool here. That is deliberate: you already built it
-in chapter 05, and the capstone's prompt does not need it. Keeping it out makes
-the file shorter and the story cleaner.
+- **One resource** (`lab://address-books`) — the house style guide that shapes
+  how the tools are used.
+- **Five tools** — `list_address_books`, `create_address_book`, `add_entry`,
+  `delete_address_book`, and `delete_entry`.
 
 ### File-only logging
 
@@ -814,18 +664,13 @@ outbound HTTP request, and response status. The log appends across runs, so
 you build up a history of what the model did. Delete the file when it gets
 unwieldy — it is git-ignored.
 
-> **Why not stderr?** The capstone produces a lot of debug traffic (three tools
+> **Why not stderr?** The capstone produces a lot of debug traffic (five tools
 > times multiple HTTP calls). Writing it to a file keeps the terminal clean
 > while still giving you full observability after the fact.
 
 Ask your client: *"set up an address book called Lab Contacts for the support
 team"* — then open `mcp_servers/07_full_server.log` to see everything the
 server did.
-
-> **Note:** The older `05_resource.py` and `06_prompt.py` files are the
-> pre-restructure demos that taught each primitive with full API calls.
-> They are superseded by this capstone; you can delete them after verifying
-> chapter 07 runs.
 
 ---
 
@@ -853,7 +698,7 @@ Three kinds of file, and no more.
 
 `tools/address_books.py` is a single domain module that registers **all three
 primitives** — four tools, the conventions resource, and the set-up prompt. It
-is the modular form of chapters 04–07, and it shows the pattern you would follow
+is the modular form of chapters 03–06, and it shows the pattern you would follow
 for any subject area: one file owns one domain, top to bottom.
 
 ### The whole extension mechanism
@@ -917,7 +762,7 @@ variable and the domain that wanted it — rather than once per tool call, as a
 
 ### One log line for every domain
 
-In chapters 04–07 each tool wrote its own DEBUG lines; here that moves into
+In chapters 03–06 each tool wrote its own DEBUG lines; here that moves into
 `webex_client.request`, which every domain already calls:
 
 ```python
@@ -939,7 +784,7 @@ contain it.
 
 ## Add your own Webex API family
 
-Chapter 07 gave you the mechanism. Here is the recipe. There is a starting point
+Chapter 06 gave you the mechanism. Here is the recipe. There is a starting point
 in the tree for exactly this: `mcp_servers/07_modular/tools/_template.py`. It is a complete
 domain module that does nothing yet — it is not in `DOMAINS`, and its one tool
 returns placeholder data over no network — so copying it is safe and changes
@@ -976,15 +821,14 @@ Each chapter above has a "Try it from the command line" section that introduces
 its test client. This section is a quick-reference summary and explains the
 logging layers in more detail.
 
-| Server | Client | Needs credentials? |
-|---|---|---|
-| `mcp_servers/01_hello_mcp.py` | `mcp_clients/01_hello_mcp_client.py` | No |
-| `mcp_servers/02_hello_resource.py` | `mcp_clients/02_hello_resource_client.py` | No |
-| `mcp_servers/03_hello_prompt.py` | `mcp_clients/03_hello_prompt_client.py` | No |
-| `mcp_servers/04_list_books.py` | `mcp_clients/04_list_books_client.py` | Yes |
-| `mcp_servers/05_list_entries.py` | `mcp_clients/05_list_entries_client.py` | Yes |
-| `mcp_servers/06_write_books.py` | `mcp_clients/06_write_books_client.py` | Yes |
-| `mcp_servers/07_full_server.py` | — | Yes |
+| Server | Needs credentials? |
+|---|---|
+| `mcp_servers/01_hello_mcp.py` | No |
+| `mcp_servers/02_hello_resource_prompt.py` | No |
+| `mcp_servers/03_read_books.py` | Yes |
+| `mcp_servers/04_write_books.py` | Yes |
+| `mcp_servers/05_delete_books.py` | Yes |
+| `mcp_servers/06_full_server.py` | Yes |
 
 Every client accepts `--verbose` (`-v`) to print raw JSON-RPC frames.
 
