@@ -14,8 +14,7 @@ import httpx
 from dotenv import load_dotenv
 from mcp.server import MCPServer
 
-# Elicitation: the server pauses a tool call to ask the user a question.
-# These imports wire that up with the resolver pattern (works on every client).
+# Elicitation imports: the resolver pattern lets the server ask the user a question mid-call.
 from mcp.server.mcpserver import (
     AcceptedElicitation,
     CancelledElicitation,
@@ -26,12 +25,14 @@ from mcp.server.mcpserver import (
 )
 from pydantic import BaseModel
 
+# Load credentials from .env.
 load_dotenv()
 
 TOKEN = os.environ.get("WEBEX_ACCESS_TOKEN")
 ORG_ID = os.environ.get("WEBEX_ORG_ID")
 CONFIG_API_BASE = os.environ.get("WXCC_CONFIG_API_BASE", "")
 
+# Stop early if any credential is missing.
 for _name, _value in (
     ("WEBEX_ACCESS_TOKEN", TOKEN),
     ("WEBEX_ORG_ID", ORG_ID),
@@ -40,48 +41,33 @@ for _name, _value in (
     if not _value:
         sys.exit(f"{_name} is not set. This lab needs Webex Contact Center - see .env.example.")
 
+# Build the API base URL and common headers.
 ORG = f"{CONFIG_API_BASE.rstrip('/')}/organization/{ORG_ID}"
 HEADERS = {"Authorization": f"Bearer {TOKEN}", "Accept": "application/json"}
 
+# Create an MCP server instance.
 mcp = MCPServer("webex-mcp-lab-05")
 
 
-# ---------------------------------------------------------------------------
-# The confirmation schema and resolver — shared by both delete tools.
-# ---------------------------------------------------------------------------
-
+# The confirmation form the user sees: one boolean field.
 class Confirm(BaseModel):
-    """The user sees one boolean field: 'ok'. That is the entire form."""
     ok: bool
 
 
-# WHO is asked? The USER, via a form rendered by the MCP client.
-# WHEN? Before the delete tool body runs — the resolver runs first.
+# Resolver for address book deletion — always asks before proceeding.
 async def confirm_delete_book(address_book_id: str) -> Elicit[Confirm]:
-    """Always ask — deletion is irreversible."""
     return Elicit(f"Delete address book '{address_book_id}'? This cannot be undone.", Confirm)
 
 
+# Resolver for entry deletion — always asks before proceeding.
 async def confirm_delete_entry(address_book_id: str, entry_id: str) -> Elicit[Confirm]:
-    """Always ask — deletion is irreversible."""
     return Elicit(
         f"Delete entry '{entry_id}' from book '{address_book_id}'? This cannot be undone.",
         Confirm,
     )
 
 
-# ---------------------------------------------------------------------------
-# Delete tools — guarded by elicitation.
-# The id to delete comes from the create→fill→delete narrative (chapters 03/04),
-# not from a list tool in this chapter.
-# ---------------------------------------------------------------------------
-
-# WHAT happens for each outcome:
-#   AcceptedElicitation(ok=True)  → DELETE fires, item is removed.
-#   AcceptedElicitation(ok=False) → user submitted the form but said "no" — skip.
-#   DeclinedElicitation           → user clicked "decline" — skip.
-#   CancelledElicitation          → user dismissed the dialog — skip.
-
+# Delete an address book after the user confirms via elicitation.
 @mcp.tool()
 async def delete_address_book(
     address_book_id: str,
@@ -103,6 +89,7 @@ async def delete_address_book(
             return {"deleted": False, "reason": "Confirmation was declined or dismissed."}
 
 
+# Delete a single contact after the user confirms via elicitation.
 @mcp.tool()
 async def delete_entry(
     address_book_id: str,
@@ -126,6 +113,7 @@ async def delete_entry(
             return {"deleted": False, "reason": "Confirmation was declined or dismissed."}
 
 
+# Start the server on stdio and wait for a client to connect.
 if __name__ == "__main__":
     print(
         "webex-mcp-lab-05 running on stdio - waiting for a client (Ctrl+C to stop).",

@@ -10,12 +10,11 @@ import re
 import sys
 from mcp.server import MCPServer
 
+# Create an MCP server instance.
 mcp = MCPServer("webex-mcp-lab-01")
 
 
-# WHO calls this? The AI assistant, when the user asks to clean a number.
-# WHERE does the return go? Straight back to the assistant, which shows it
-# to the user. The Python here runs on the server; the assistant does not.
+# Register a tool that cleans a phone number to E.164 format.
 @mcp.tool()
 async def format_phone(number: str) -> str:
     """Clean a phone number to E.164 form, e.g. +14155550101."""
@@ -25,6 +24,7 @@ async def format_phone(number: str) -> str:
     return "+" + digits
 
 
+# Start the server on stdio and wait for a client to connect.
 if __name__ == "__main__":
     print(
         "webex-mcp-lab-01 running on stdio - waiting for a client (Ctrl+C to stop).",

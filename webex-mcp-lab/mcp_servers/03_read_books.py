@@ -12,12 +12,14 @@ import httpx
 from dotenv import load_dotenv
 from mcp.server import MCPServer
 
+# Load credentials from .env.
 load_dotenv()
 
 TOKEN = os.environ.get("WEBEX_ACCESS_TOKEN")
 ORG_ID = os.environ.get("WEBEX_ORG_ID")
 CONFIG_API_BASE = os.environ.get("WXCC_CONFIG_API_BASE", "")
 
+# Stop early if any credential is missing.
 for _name, _value in (
     ("WEBEX_ACCESS_TOKEN", TOKEN),
     ("WEBEX_ORG_ID", ORG_ID),
@@ -26,12 +28,15 @@ for _name, _value in (
     if not _value:
         sys.exit(f"{_name} is not set. This lab needs Webex Contact Center - see .env.example.")
 
+# Build the API base URL and common headers.
 ORG = f"{CONFIG_API_BASE.rstrip('/')}/organization/{ORG_ID}"
 HEADERS = {"Authorization": f"Bearer {TOKEN}", "Accept": "application/json"}
 
+# Create an MCP server instance.
 mcp = MCPServer("webex-mcp-lab-03")
 
 
+# List all address books in the Contact Center organization.
 @mcp.tool()
 async def list_address_books(limit: int = 50) -> dict:
     """List the address books configured in this Contact Center organization."""
@@ -50,6 +55,7 @@ async def list_address_books(limit: int = 50) -> dict:
     return {"count": len(books), "address_books": books}
 
 
+# List contacts inside one address book, using its id from list_address_books.
 @mcp.tool()
 async def list_entries(address_book_id: str, search: str = "") -> dict:
     """List the contacts inside one address book, optionally filtered by `search`.
@@ -75,6 +81,7 @@ async def list_entries(address_book_id: str, search: str = "") -> dict:
     return {"count": len(entries), "entries": entries}
 
 
+# Start the server on stdio and wait for a client to connect.
 if __name__ == "__main__":
     print(
         "webex-mcp-lab-03 running on stdio - waiting for a client (Ctrl+C to stop).",

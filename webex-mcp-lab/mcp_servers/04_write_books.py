@@ -12,13 +12,14 @@ import httpx
 from dotenv import load_dotenv
 from mcp.server import MCPServer
 
-
+# Load credentials from .env.
 load_dotenv()
 
 TOKEN = os.environ.get("WEBEX_ACCESS_TOKEN")
 ORG_ID = os.environ.get("WEBEX_ORG_ID")
 CONFIG_API_BASE = os.environ.get("WXCC_CONFIG_API_BASE", "")
 
+# Stop early if any credential is missing.
 for _name, _value in (
     ("WEBEX_ACCESS_TOKEN", TOKEN),
     ("WEBEX_ORG_ID", ORG_ID),
@@ -27,12 +28,15 @@ for _name, _value in (
     if not _value:
         sys.exit(f"{_name} is not set. This lab needs Webex Contact Center - see .env.example.")
 
+# Build the API base URL and common headers.
 ORG = f"{CONFIG_API_BASE.rstrip('/')}/organization/{ORG_ID}"
 HEADERS = {"Authorization": f"Bearer {TOKEN}", "Accept": "application/json"}
 
+# Create an MCP server instance.
 mcp = MCPServer("webex-mcp-lab-04")
 
 
+# Turn an HTTP failure into a sentence the model can relay to the user.
 def _fail(response: httpx.Response) -> dict:
     """Turn an HTTP failure into a sentence the model can pass on to the user."""
     if response.status_code == 401:
@@ -46,6 +50,7 @@ def _fail(response: httpx.Response) -> dict:
     return {"error": f"Webex Contact Center returned HTTP {response.status_code}."}
 
 
+# Create a new address book and return its id.
 @mcp.tool()
 async def create_address_book(name: str, description: str = "") -> dict:
     """Create a new address book. Returns its id, which add_entry then needs.
@@ -65,6 +70,7 @@ async def create_address_book(name: str, description: str = "") -> dict:
     return {"created": True, "address_book_id": book.get("id"), "name": book.get("name")}
 
 
+# Add a contact to an address book using the id from create_address_book.
 @mcp.tool()
 async def add_entry(address_book_id: str, name: str, number: str) -> dict:
     """Add a contact to an address book. `number` should be E.164, e.g. +14155550101.
@@ -85,6 +91,7 @@ async def add_entry(address_book_id: str, name: str, number: str) -> dict:
     return {"added": True, "entry_id": response.json().get("id"), "name": name}
 
 
+# Start the server on stdio and wait for a client to connect.
 if __name__ == "__main__":
     print(
         "webex-mcp-lab-04 running on stdio - waiting for a client (Ctrl+C to stop).",

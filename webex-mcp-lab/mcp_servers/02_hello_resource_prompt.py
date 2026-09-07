@@ -9,11 +9,11 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 import sys
 from mcp.server import MCPServer
 
+# Create an MCP server instance.
 mcp = MCPServer("webex-mcp-lab-02")
 
 
-# WHO calls this? The AI assistant, when the prompt workflow asks it to measure text.
-# WHERE does the return go? Back to the assistant, which compares against the rules.
+# Register a tool that counts words and characters in a piece of text.
 @mcp.tool()
 async def count_words(text: str) -> dict:
     """Count the words and characters in a piece of text."""
@@ -21,23 +21,18 @@ async def count_words(text: str) -> dict:
     return {"words": len(words), "characters": len(text)}
 
 
-# WHO reads this? The CLIENT, which passes the text to the model as context.
-# The tool above knows how to count — but it has no idea what the limits are.
-# Only this resource says "12 words max" and "never say ASAP". That is why
-# a resource matters: it carries rules the tool cannot encode.
+# Register a resource with greeting rules the tool cannot know on its own.
 @mcp.resource("lab://greeting-rules")
 def greeting_rules() -> str:
     return (
-        "Rules for agent chat greetings:\n"
+        "Webex Contact Center greeting rules for this organization:\n"
         "1. 12 words maximum.\n"
         "2. Must include the agent's first name.\n"
         "3. Never use 'ASAP' or 'obviously'.\n"
     )
 
 
-# WHO triggers this? The USER, from a slash command or menu in their client.
-# The returned text becomes the opening message the model sees, chaining
-# the resource and the tool into a single review workflow.
+# Register a prompt that chains the resource and the tool into a review workflow.
 @mcp.prompt()
 def review_greeting(greeting: str = "") -> str:
     """Review an agent greeting against the organization rules."""
@@ -50,6 +45,7 @@ def review_greeting(greeting: str = "") -> str:
     )
 
 
+# Start the server on stdio and wait for a client to connect.
 if __name__ == "__main__":
     print(
         "webex-mcp-lab-02 running on stdio - waiting for a client (Ctrl+C to stop).",

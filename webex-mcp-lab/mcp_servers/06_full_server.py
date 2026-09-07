@@ -4,7 +4,7 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 - Diego Manuel Jimenez Moreno
 - Mo Eyad Musallam
 """
-# Step 07 - capstone: prompt + resource + tools on the real Contact Center API.
+# Step 06 - capstone: prompt + resource + tools on the real Contact Center API.
 # All three MCP primitives in one server. Logs go to 07_full_server.log only.
 
 import logging
@@ -16,6 +16,8 @@ from typing import Annotated
 import httpx
 from dotenv import load_dotenv
 from mcp.server import MCPServer
+
+# Elicitation imports for the delete tools.
 from mcp.server.mcpserver import (
     AcceptedElicitation,
     CancelledElicitation,
@@ -26,6 +28,7 @@ from mcp.server.mcpserver import (
 )
 from pydantic import BaseModel
 
+# Configure file-only logging (not stderr) so the terminal stays clean.
 _LOG_FILE = Path(__file__).parent / "07_full_server.log"
 logging.basicConfig(
     filename=str(_LOG_FILE),
@@ -34,12 +37,14 @@ logging.basicConfig(
 )
 log = logging.getLogger("webex")
 
+# Load credentials from .env.
 load_dotenv()
 
 TOKEN = os.environ.get("WEBEX_ACCESS_TOKEN")
 ORG_ID = os.environ.get("WEBEX_ORG_ID")
 CONFIG_API_BASE = os.environ.get("WXCC_CONFIG_API_BASE", "")
 
+# Stop early if any credential is missing.
 for _name, _value in (
     ("WEBEX_ACCESS_TOKEN", TOKEN),
     ("WEBEX_ORG_ID", ORG_ID),
@@ -48,25 +53,30 @@ for _name, _value in (
     if not _value:
         sys.exit(f"{_name} is not set. See .env.example.")
 
+# Build the API base URL and common headers.
 ORG = f"{CONFIG_API_BASE.rstrip('/')}/organization/{ORG_ID}"
 HEADERS = {"Authorization": f"Bearer {TOKEN}", "Accept": "application/json"}
 
+# Create an MCP server instance.
 mcp = MCPServer("webex-mcp-lab-07")
 
 
-# Elicitation confirmation for destructive operations.
+# The confirmation form for destructive operations.
 class Confirm(BaseModel):
     ok: bool
 
 
+# Resolver for address book deletion.
 async def confirm_delete_book(address_book_id: str) -> Elicit[Confirm]:
     return Elicit(f"Delete address book '{address_book_id}'? This cannot be undone.", Confirm)
 
 
+# Resolver for entry deletion.
 async def confirm_delete_entry(address_book_id: str, entry_id: str) -> Elicit[Confirm]:
     return Elicit(f"Delete entry '{entry_id}' from '{address_book_id}'? Cannot be undone.", Confirm)
 
 
+# Register a prompt that orchestrates the full address book setup workflow.
 @mcp.prompt()
 def set_up_address_book(book_name: str = "", team: str = "") -> str:
     """Set up an address book end to end: create it and add its first contacts."""
@@ -82,6 +92,7 @@ def set_up_address_book(book_name: str = "", team: str = "") -> str:
     )
 
 
+# Register a resource with the house style for address books.
 @mcp.resource("lab://address-books")
 def address_book_conventions() -> str:
     """House style for address books in this organization."""
@@ -90,7 +101,7 @@ def address_book_conventions() -> str:
         "# Address book conventions\n"
         "\n"
         "- Name a book for its team or purpose, e.g. 'Sales - EMEA', not 'Book1'.\n"
-        "- Name a book MUST be profressional name and must not conatin any number'.\n"
+        "- Name a book MUST be professional name and must not contain any number.\n"
         "- Before creating a book, list existing books and reuse one if it fits.\n"
         "- Store numbers in E.164 format: +, country code, no spaces, e.g. +14155550101.\n"
         "- Give every entry a human name; never add a bare number.\n"
@@ -98,7 +109,7 @@ def address_book_conventions() -> str:
     )
 
 
-
+# List all address books in the Contact Center organization.
 @mcp.tool()
 async def list_address_books(limit: int = 50) -> dict:
     """List the address books configured in this Contact Center organization."""
@@ -115,6 +126,7 @@ async def list_address_books(limit: int = 50) -> dict:
     return {"count": len(books), "address_books": books}
 
 
+# Create a new address book following the lab://address-books conventions.
 @mcp.tool()
 async def create_address_book(name: str, description: str = "") -> dict:
     """Create a new address book, following lab://address-books conventions."""
@@ -131,6 +143,7 @@ async def create_address_book(name: str, description: str = "") -> dict:
     return {"created": True, "address_book_id": book.get("id"), "name": book.get("name")}
 
 
+# Add a contact to an address book.
 @mcp.tool()
 async def add_entry(address_book_id: str, name: str, number: str) -> dict:
     """Add a contact to an address book. number should be E.164, e.g. +14155550101."""
@@ -146,6 +159,7 @@ async def add_entry(address_book_id: str, name: str, number: str) -> dict:
     return {"added": True, "entry_id": r.json().get("id"), "name": name}
 
 
+# Delete an address book after the user confirms via elicitation.
 @mcp.tool()
 async def delete_address_book(
     address_book_id: str,
@@ -167,6 +181,7 @@ async def delete_address_book(
             return {"deleted": False, "reason": "Confirmation was declined or dismissed."}
 
 
+# Delete a single contact after the user confirms via elicitation.
 @mcp.tool()
 async def delete_entry(
     address_book_id: str,
@@ -191,6 +206,7 @@ async def delete_entry(
             return {"deleted": False, "reason": "Confirmation was declined or dismissed."}
 
 
+# Start the server on stdio and wait for a client to connect.
 if __name__ == "__main__":
     print(
         "webex-mcp-lab-07 running on stdio - waiting for a client (Ctrl+C to stop).",
