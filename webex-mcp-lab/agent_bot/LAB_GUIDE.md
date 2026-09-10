@@ -15,15 +15,19 @@ You already have an LLM-powered Webex bot (`05_llmbot.py`). In this lab you will
 | `07_agentbot.py` | Plain LLM chat — the base | ~75 |
 | `08_agentbot.py` | 07 + **MCP tools** (via `mcp_client` module) | ~80 |
 | `09_agentbot.py` | 08 + **Agent Skills** (via `skills_loader` module) | ~95 |
+| `10_agentbot.py` | 08 + **full MCP** — resources, prompts, elicitation (via `mcp_client_full`) | ~85 |
 
-Plus two reusable modules the attendees build first:
+Plus reusable modules the attendees build first:
 
 | Module | What It Does | Lines |
 |--------|--------------|-------|
 | `mcp_client.py` | Connect to any MCP server, discover tools, agentic loop | ~100 |
+| `mcp_client_resources.py` | mcp_client + **resources** (read conventions) | ~120 |
+| `mcp_client_prompts.py` | + **prompts** (render server workflows) | ~140 |
+| `mcp_client_full.py` | + **elicitation** (server asks user mid-call) | ~160 |
 | `skills_loader.py` | Discover and activate Agent Skills (agentskills.io) | ~100 |
 
-**The key insight:** `diff 07 08` shows exactly what MCP adds. `diff 08 09` shows exactly what skills add.
+**The key insight:** `diff` between adjacent files shows exactly what each primitive adds.
 
 ---
 
@@ -128,6 +132,83 @@ python 09_agentbot.py
 
 ---
 
+## Step 6 — Add MCP Resources to the client
+
+**File:** `mcp_client_resources.py`
+
+Run `diff mcp_client.py mcp_client_resources.py` to see the changes:
+- `list_resources()` and `read_resource()` at connect time
+- `get_resources_text()` accessor for the caller
+- Resource text prepended to the system message in `agentic_loop()`
+
+**Standalone demo** (no bot needed, needs Contact Center credentials):
+
+```bash
+python mcp_client_resources.py
+```
+
+**Verify:** The demo prints the `lab://address-books` conventions text.
+
+---
+
+## Step 7 — Add MCP Prompts to the client
+
+**File:** `mcp_client_prompts.py`
+
+Run `diff mcp_client_resources.py mcp_client_prompts.py` to see the changes:
+- `list_prompts()` at connect time
+- `get_prompt(name, args)` renders a server prompt into messages
+
+**Standalone demo:**
+
+```bash
+python mcp_client_prompts.py
+```
+
+**Verify:** The demo lists prompts, renders `set_up_address_book`, and shows the unknown-prompt error.
+
+---
+
+## Step 8 — Add Elicitation to the client
+
+**File:** `mcp_client_full.py`
+
+Run `diff mcp_client_prompts.py mcp_client_full.py` to see the changes:
+- `elicitation_callback` passed to `ClientSession`
+- Console mode (`interactive=True`): `input()` asks for confirmation
+- Bot mode (`interactive=False`): auto-accepts and logs a note
+
+**Standalone demo:**
+
+```bash
+python mcp_client_full.py
+```
+
+**Verify:** The demo triggers a delete; the server asks you to confirm at the console. Type `y` to proceed or `n` to decline.
+
+---
+
+## Step 9 — Full MCP bot
+
+**File:** `10_agentbot.py`
+
+Run `diff 08_agentbot.py 10_agentbot.py` to see the changes:
+- `import mcp_client_full as mcp_client` instead of `import mcp_client`
+- `interactive=False` in `connect()`
+- Resource text wired into the system prompt
+
+```bash
+python 10_agentbot.py
+```
+
+**Verify:**
+- *"list the address books"* → tools work as before
+- *"what are the address book conventions?"* → the bot knows the conventions (resources)
+- *"set up an address book for the support team"* → prompt-driven workflow (prompts)
+- *"delete the Demo Team address book"* → auto-accepted without hanging (elicitation)
+
+---
+
 ## Example Skills
 
 | Skill | Purpose |
@@ -142,13 +223,19 @@ Add your own: create `skills/<name>/SKILL.md` with `name` + `description` frontm
 ## Architecture
 
 ```
-07_agentbot.py       08_agentbot.py       09_agentbot.py
-  OpenAI chat    -->   + mcp_client    -->   + skills_loader
-  (no tools)           (MCP tools)           (MCP + skills)
-                            |                     |
-                       mcp_client.py         skills_loader.py
-                            |                     |
-                       06_full_server.py     skills/*/SKILL.md
+07_agentbot.py       08_agentbot.py       09_agentbot.py       10_agentbot.py
+  OpenAI chat    -->   + mcp_client    -->   + skills_loader -->  + mcp_client_full
+  (no tools)           (MCP tools)           (MCP + skills)       (full MCP)
+                            |                     |                     |
+                       mcp_client.py         skills_loader.py   mcp_client_full.py
+                            |                     |                     |
+                       06_full_server.py     skills/*/SKILL.md  06_full_server.py
+```
+
+**Progressive client modules** (taught via `diff`):
+```
+mcp_client.py → mcp_client_resources.py → mcp_client_prompts.py → mcp_client_full.py
+  (tools)           + resources                + prompts              + elicitation
 ```
 
 ---
