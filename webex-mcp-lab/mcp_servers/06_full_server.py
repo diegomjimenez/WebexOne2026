@@ -126,6 +126,28 @@ async def list_address_books(limit: int = 50) -> dict:
     return {"count": len(books), "address_books": books}
 
 
+# List the contacts inside one address book.
+@mcp.tool()
+async def list_entries(address_book_id: str, search: str = "") -> dict:
+    """List the contacts inside one address book, optionally filtered by `search`."""
+    log.debug("list_entries: GET %s/v2/address-book/%s/entry", ORG, address_book_id)
+    params: dict = {"page": 0, "pageSize": 100}
+    if search:
+        params["search"] = search
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get(
+            f"{ORG}/v2/address-book/{address_book_id}/entry", headers=HEADERS, params=params
+        )
+    log.debug("list_entries: HTTP %s", r.status_code)
+    if r.status_code != 200:
+        return {"error": f"Webex Contact Center returned HTTP {r.status_code}."}
+    entries = [
+        {"id": e.get("id"), "name": e.get("name"), "number": e.get("number")}
+        for e in r.json().get("data", [])
+    ]
+    return {"count": len(entries), "entries": entries}
+
+
 # Create a new address book following the lab://address-books conventions.
 @mcp.tool()
 async def create_address_book(name: str, description: str = "") -> dict:

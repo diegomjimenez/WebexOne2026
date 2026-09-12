@@ -184,7 +184,9 @@ def call_tool(name, args):
         res = await _session.call_tool(name, args)
         return "\n".join(b.text for b in res.content if hasattr(b, "text")) or '{"ok":true}'
     try:
-        return asyncio.run_coroutine_threadsafe(_do(), _loop).result(timeout=30)
+        # Timeout must exceed elicit_bridge.request() timeout (180s)      # NEW
+        # so eliciting tools return real results, not a spurious error.   # NEW
+        return asyncio.run_coroutine_threadsafe(_do(), _loop).result(timeout=210)  # NEW
     except Exception as exc:
         return f"[Tool Error] {exc}"
 
