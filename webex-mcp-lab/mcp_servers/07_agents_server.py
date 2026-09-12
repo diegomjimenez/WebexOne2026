@@ -140,13 +140,16 @@ async def list_agents(limit: int = 50) -> dict:
     log.debug("list_agents: HTTP %s", r.status_code)
     if r.status_code != 200:
         return {"error": f"Webex Contact Center returned HTTP {r.status_code}."}
+    # /user may return a bare list or {"data": [...]}, handle both.
+    body = r.json()
+    items = body if isinstance(body, list) else body.get("data", [])
     agents = [
         {
             "id": a.get("id"),
             "name": a.get("displayName") or a.get("email"),
             "desktop_profile_id": a.get("agentProfileId") or a.get("desktopProfileId"),
         }
-        for a in r.json().get("data", [])
+        for a in items
     ]
     return {"count": len(agents), "agents": agents}
 
@@ -179,9 +182,12 @@ async def list_teams(limit: int = 50) -> dict:
     log.debug("list_teams: HTTP %s", r.status_code)
     if r.status_code != 200:
         return {"error": f"Webex Contact Center returned HTTP {r.status_code}."}
+    # /team may return a bare list or {"data": [...]}, handle both.
+    body = r.json()
+    items = body if isinstance(body, list) else body.get("data", [])
     teams = [
         {"id": t.get("id"), "name": t.get("name")}
-        for t in r.json().get("data", [])
+        for t in items
     ]
     return {"count": len(teams), "teams": teams}
 
