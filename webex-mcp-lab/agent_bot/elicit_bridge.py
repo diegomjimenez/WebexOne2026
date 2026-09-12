@@ -60,7 +60,7 @@ def card_json(message, elicit_id):
                             "items": [{
                                 "type": "TextBlock",
                                 "weight": "Bolder",
-                                "text": "Cisco Live!",
+                                "text": "webex one 2026!",
                                 "horizontalAlignment": "Left",
                                 "wrap": True,
                                 "color": "Light",

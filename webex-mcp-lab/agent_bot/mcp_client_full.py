@@ -12,8 +12,10 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp import types as mcp_types                                       # NEW
 from openai import OpenAI
+from dotenv import load_dotenv
 
 log = logging.getLogger(__name__)
+load_dotenv()
 _openai = OpenAI()
 
 # Module state, populated by connect().

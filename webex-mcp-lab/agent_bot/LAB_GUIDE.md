@@ -211,6 +211,29 @@ python 10_agentbot.py
 
 ---
 
+## Step 11 — WebSocket bot (continues LAB-31123)
+
+**Files:** `websocket_client.py`, `11_agentbot.py`
+
+This step replaces the `webex_bot` library with the raw Mercury WebSocket client from LAB-31123. The MCP wiring is identical to Step 10 — only the transport layer changes.
+
+Run `diff 10_agentbot.py 11_agentbot.py` to see the changes:
+- No `webex_bot` imports — uses `WebSocketClient` from `websocket_client.py`
+- Manual slash-command routing in `on_message()` instead of `Command` classes
+- Replies via `requests.post()` instead of returning a string
+
+```bash
+python 11_agentbot.py
+```
+
+**Verify:**
+- *"list the address books"* → tools work (default chat route)
+- */setup EMEA team* → triggers the `set_up_address_book` prompt workflow
+- */reset* → clears conversation history
+- *"delete the HR Team address book"* → elicitation Adaptive Card appears
+
+---
+
 ## Example Skills
 
 | Skill | Purpose |

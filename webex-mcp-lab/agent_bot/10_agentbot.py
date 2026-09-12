@@ -13,6 +13,7 @@ from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
 import mcp_client_full as mcp_client                                     # NEW
 import elicit_bridge                                                     # NEW
+import prompt_command                                                    # NEW
 
 load_dotenv()
 
@@ -40,10 +41,6 @@ mcp_client.connect(
 elicit_bridge.init(bot_token)                                            # NEW
 mcp_client.set_elicit_bridge(elicit_bridge)                              # NEW
 
-# Expose MCP prompts as meta-tools the LLM can call.
-prompt_tools = mcp_client.get_prompt_tools()                             # NEW
-prompt_dispatch = mcp_client.get_prompt_dispatch()                       # NEW
-
 # Build system prompt with server resource text (conventions, policies).
 SYSTEM_PROMPT = (
     "You are a helpful Webex assistant for managing "
@@ -53,6 +50,10 @@ SYSTEM_PROMPT = (
 
 # Per-user conversation history.
 conversations: dict[str, list] = {}
+
+# Wire the /setup slash command for MCP prompts.                          NEW
+prompt_command.init(mcp_client, conversations,                           # NEW
+                    SYSTEM_PROMPT, MODEL, MAX_HISTORY)                    # NEW
 
 
 # Chat command — send messages through the MCP agentic loop.
@@ -64,7 +65,7 @@ class ChatCommand(Command):
         return "Thinking…"
     def execute(self, message, attachment_actions, activity):
         # Handle Adaptive Card button taps (elicitation confirm/decline).  NEW
-        if attachment_actions:                                            # NEW
+        if attachment_actions and hasattr(attachment_actions, "inputs"):  # NEW
             data = attachment_actions.inputs                              # NEW
             confirmed = data.get("action") == "confirm"                  # NEW
             elicit_bridge.resolve(data.get("elicit_id", ""), confirmed)  # NEW
@@ -78,9 +79,7 @@ class ChatCommand(Command):
         # Set the room so the bridge can post cards here.                 NEW
         room_id = activity.get("target", {}).get("globalId", "")         # NEW
         mcp_client.set_current_room(room_id)                             # NEW
-        result = mcp_client.agentic_loop(
-            conversations[uid], model=MODEL,
-            extra_tools=prompt_tools, dispatch=prompt_dispatch)
+        result = mcp_client.agentic_loop(conversations[uid], model=MODEL)
         conversations[uid].append({"role": "assistant", "content": result})
         while len(conversations[uid]) > 1 + MAX_HISTORY * 2:
             conversations[uid].pop(1); conversations[uid].pop(1)
@@ -101,5 +100,6 @@ class ResetCommand(Command):
 bot = WebexBot(teams_bot_token=bot_token, bot_name="Agent Bot (Step 10)",
                approved_domains=domain, include_demo_commands=False,
                help_command=ChatCommand())
+bot.add_command(prompt_command.SetupCommand())                           # NEW
 bot.add_command(ResetCommand())
 bot.run()
