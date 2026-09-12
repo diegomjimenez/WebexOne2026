@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from webex_bot.models.command import Command
 from webex_bot.webex_bot import WebexBot
 import mcp_client_full as mcp_client                                     # NEW
+import elicit_bridge                                                     # NEW
 
 load_dotenv()
 
@@ -35,7 +36,15 @@ mcp_client.connect(
     interactive=False,                                                   # NEW
 )
 
-# Build system prompt with server resource text (conventions, policies).  NEW
+# Wire the Adaptive Card elicitation bridge.                              NEW
+elicit_bridge.init(bot_token)                                            # NEW
+mcp_client.set_elicit_bridge(elicit_bridge)                              # NEW
+
+# Expose MCP prompts as meta-tools the LLM can call.
+prompt_tools = mcp_client.get_prompt_tools()                             # NEW
+prompt_dispatch = mcp_client.get_prompt_dispatch()                       # NEW
+
+# Build system prompt with server resource text (conventions, policies).
 SYSTEM_PROMPT = (
     "You are a helpful Webex assistant for managing "
     "Contact Center resources. Be concise.\n\n"
@@ -54,13 +63,24 @@ class ChatCommand(Command):
     def pre_execute(self, message, attachment_actions, activity):
         return "Thinking…"
     def execute(self, message, attachment_actions, activity):
+        # Handle Adaptive Card button taps (elicitation confirm/decline).  NEW
+        if attachment_actions:                                            # NEW
+            data = attachment_actions.inputs                              # NEW
+            confirmed = data.get("action") == "confirm"                  # NEW
+            elicit_bridge.resolve(data.get("elicit_id", ""), confirmed)  # NEW
+            return "✓ Confirmed." if confirmed else "✗ Declined."        # NEW
         uid = activity["actor"]["emailAddress"]
         if not message or not message.strip():
             return "Type a message and I'll help."
         if uid not in conversations:
             conversations[uid] = [{"role": "system", "content": SYSTEM_PROMPT}]
         conversations[uid].append({"role": "user", "content": message.strip()})
-        result = mcp_client.agentic_loop(conversations[uid], model=MODEL)
+        # Set the room so the bridge can post cards here.                 NEW
+        room_id = activity.get("target", {}).get("globalId", "")         # NEW
+        mcp_client.set_current_room(room_id)                             # NEW
+        result = mcp_client.agentic_loop(
+            conversations[uid], model=MODEL,
+            extra_tools=prompt_tools, dispatch=prompt_dispatch)
         conversations[uid].append({"role": "assistant", "content": result})
         while len(conversations[uid]) > 1 + MAX_HISTORY * 2:
             conversations[uid].pop(1); conversations[uid].pop(1)

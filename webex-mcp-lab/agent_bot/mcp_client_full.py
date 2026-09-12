@@ -22,7 +22,11 @@ _session = None
 _tools = []
 _resources_text = ""
 _prompts = {}
+_prompt_tools = []
+_prompt_dispatch = {}
 _interactive = False                                                     # NEW
+_elicit_bridge = None                                                    # NEW
+_current_room = None                                                     # NEW
 
 
 # Elicitation callback — the server asks the user a question mid-call.    NEW
@@ -31,9 +35,12 @@ async def _on_elicit(context, params):                                   # NEW
     if _interactive:                                                      # NEW
         answer = input(f"\n⚠ {message}\naccept? [y/N] ").strip().lower() # NEW
         action = "accept" if answer in ("y", "yes") else "decline"       # NEW
+    elif _elicit_bridge:                                                  # NEW
+        confirmed = _elicit_bridge.request(message)                      # NEW
+        action = "accept" if confirmed else "decline"                    # NEW
     else:                                                                 # NEW
         log.info("Auto-accept elicitation: %s "                          # NEW
-                 "(production: use Adaptive Cards)", message)             # NEW
+                 "(no bridge, auto-accepting)", message)                  # NEW
         action = "accept"                                                # NEW
     return mcp_types.ElicitResult(action=action, content={"ok": True})   # NEW
 
@@ -41,6 +48,7 @@ async def _on_elicit(context, params):                                   # NEW
 # Spawn the MCP server, initialize the session, discover tools, resources, and prompts.
 def connect(command, args, cwd=".", timeout=30, interactive=False):
     global _loop, _session, _tools, _resources_text, _prompts
+    global _prompt_tools, _prompt_dispatch
     global _interactive                                                  # NEW
     _interactive = interactive                                           # NEW
     error = None
@@ -48,6 +56,7 @@ def connect(command, args, cwd=".", timeout=30, interactive=False):
     async def _run(params):
         nonlocal error
         global _session, _tools, _resources_text, _prompts
+        global _prompt_tools, _prompt_dispatch
         try:
             async with stdio_client(params) as (r, w):
                 async with ClientSession(                                # NEW
@@ -76,6 +85,27 @@ def connect(command, args, cwd=".", timeout=30, interactive=False):
                     # Discover prompts.
                     prompt_list = (await s.list_prompts()).prompts
                     _prompts = {p.name: p for p in prompt_list}
+                    # Build meta-tools so the LLM can trigger prompts.
+                    _prompt_tools = []
+                    _prompt_dispatch = {}
+                    for p in prompt_list:
+                        fname = f"prompt__{p.name}"
+                        props = {a.name: {"type": "string"}
+                                 for a in (p.arguments or [])}
+                        _prompt_tools.append({"type": "function", "function":
+                            {"name": fname,
+                             "description": f"Activate workflow: "
+                                            f"{getattr(p, 'description', '') or p.name}",
+                             "parameters": {"type": "object",
+                                            "properties": props}}})
+                        def _make_handler(pname):
+                            def handler(args):
+                                r = get_prompt(pname, args)
+                                if isinstance(r, list):
+                                    return "\n".join(m["content"] for m in r)
+                                return r
+                            return handler
+                        _prompt_dispatch[fname] = _make_handler(p.name)
                     ready.set()
                     while True:
                         await asyncio.sleep(1)
@@ -105,6 +135,28 @@ def connect(command, args, cwd=".", timeout=30, interactive=False):
 # Return the concatenated resource text (empty string if none).
 def get_resources_text():
     return _resources_text
+
+
+# OpenAI function specs for prompt meta-tools (pass as extra_tools).
+def get_prompt_tools():
+    return list(_prompt_tools)
+
+
+# Dispatch dict for prompt meta-tools (merge into dispatch).
+def get_prompt_dispatch():
+    return dict(_prompt_dispatch)
+
+
+# Register an elicit bridge (Adaptive Card) for bot mode.                NEW
+def set_elicit_bridge(bridge):                                           # NEW
+    global _elicit_bridge                                                # NEW
+    _elicit_bridge = bridge                                              # NEW
+
+
+# Set the Webex room id for the next elicitation card.                   NEW
+def set_current_room(room_id):                                           # NEW
+    if _elicit_bridge:                                                   # NEW
+        _elicit_bridge.set_room(room_id)                                 # NEW
 
 
 # Render a server prompt by name and return the messages list.

@@ -21,16 +21,20 @@ _session = None
 _tools = []
 _resources_text = ""
 _prompts = {}                                                            # NEW
+_prompt_tools = []                                                       # NEW
+_prompt_dispatch = {}                                                    # NEW
 
 
 # Spawn the MCP server, initialize the session, discover tools, resources, and prompts.
 def connect(command, args, cwd=".", timeout=30):
-    global _loop, _session, _tools, _resources_text, _prompts            # NEW
+    global _loop, _session, _tools, _resources_text, _prompts             # NEW
+    global _prompt_tools, _prompt_dispatch                               # NEW
     error = None
 
     async def _run(params):
         nonlocal error
-        global _session, _tools, _resources_text, _prompts               # NEW
+        global _session, _tools, _resources_text, _prompts                # NEW
+        global _prompt_tools, _prompt_dispatch                           # NEW
         try:
             async with stdio_client(params) as (r, w):
                 async with ClientSession(r, w) as s:
@@ -56,6 +60,27 @@ def connect(command, args, cwd=".", timeout=30):
                     # Discover prompts.                                       NEW
                     prompt_list = (await s.list_prompts()).prompts             # NEW
                     _prompts = {p.name: p for p in prompt_list}               # NEW
+                    # Build meta-tools so the LLM can trigger prompts.        NEW
+                    _prompt_tools = []                                         # NEW
+                    _prompt_dispatch = {}                                      # NEW
+                    for p in prompt_list:                                      # NEW
+                        fname = f"prompt__{p.name}"                            # NEW
+                        props = {a.name: {"type": "string"}                   # NEW
+                                 for a in (p.arguments or [])}                # NEW
+                        _prompt_tools.append({"type": "function", "function": # NEW
+                            {"name": fname,                                   # NEW
+                             "description": f"Activate workflow: "            # NEW
+                                            f"{getattr(p, 'description', '') or p.name}",
+                             "parameters": {"type": "object",                 # NEW
+                                            "properties": props}}})           # NEW
+                        def _make_handler(pname):                             # NEW
+                            def handler(args):                                # NEW
+                                r = get_prompt(pname, args)                   # NEW
+                                if isinstance(r, list):                       # NEW
+                                    return "\n".join(m["content"] for m in r) # NEW
+                                return r                                      # NEW
+                            return handler                                    # NEW
+                        _prompt_dispatch[fname] = _make_handler(p.name)       # NEW
                     ready.set()
                     while True:
                         await asyncio.sleep(1)
@@ -84,6 +109,16 @@ def connect(command, args, cwd=".", timeout=30):
 # Return the concatenated resource text (empty string if none).
 def get_resources_text():
     return _resources_text
+
+
+# OpenAI function specs for prompt meta-tools (pass as extra_tools).      NEW
+def get_prompt_tools():                                                  # NEW
+    return list(_prompt_tools)                                           # NEW
+
+
+# Dispatch dict for prompt meta-tools (merge into dispatch).              NEW
+def get_prompt_dispatch():                                               # NEW
+    return dict(_prompt_dispatch)                                        # NEW
 
 
 # Render a server prompt by name and return the messages list.            NEW
@@ -155,6 +190,9 @@ if __name__ == "__main__":
     print("\n--- Available prompts ---")
     for name in _prompts:
         print(f"  {name}")
+    print("\n--- Prompt meta-tools for LLM ---")
+    for t in get_prompt_tools():
+        print(f"  {t['function']['name']}: {t['function']['description'][:80]}")
     print("\n--- Rendered: set_up_address_book ---")
     result = get_prompt("set_up_address_book",
                         {"book_name": "Demo Team", "team": "support"})

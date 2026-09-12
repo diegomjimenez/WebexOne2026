@@ -196,6 +196,8 @@ Run `diff 08_agentbot.py 10_agentbot.py` to see the changes:
 - `import mcp_client_full as mcp_client` instead of `import mcp_client`
 - `interactive=False` in `connect()`
 - Resource text wired into the system prompt
+- **Prompt meta-tools**: `get_prompt_tools()` and `get_prompt_dispatch()` are passed to `agentic_loop()` so the LLM can activate server-defined workflows (e.g. `set_up_address_book`) as callable functions
+- **Adaptive Card elicitation**: `elicit_bridge` posts a Cisco Live branded card with Confirm/Decline buttons when the MCP server fires an elicitation (e.g. delete). The bot blocks until the user taps a button or 60 seconds pass
 
 ```bash
 python 10_agentbot.py
@@ -204,8 +206,8 @@ python 10_agentbot.py
 **Verify:**
 - *"list the address books"* → tools work as before
 - *"what are the address book conventions?"* → the bot knows the conventions (resources)
-- *"set up an address book for the support team"* → prompt-driven workflow (prompts)
-- *"delete the Demo Team address book"* → auto-accepted without hanging (elicitation)
+- *"set up an address book for the EMEA team"* → the bot calls `prompt__set_up_address_book`, gets the server's workflow steps, then follows them (reads resource, checks existing books, creates if needed, asks for contacts)
+- *"delete the HR Team address book"* → an Adaptive Card appears with ✓ Confirm / ✗ Decline buttons; tapping Confirm completes the delete, tapping Decline cancels it
 
 ---
 
