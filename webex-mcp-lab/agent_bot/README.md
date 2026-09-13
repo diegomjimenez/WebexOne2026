@@ -34,9 +34,9 @@ Two design ideas make it reusable:
 agent_bot/
 ├── agentbot.py            # entrypoint: config, wiring, message/card routing
 ├── system_prompt.txt      # editable, domain-neutral base persona
-├── local_agent_tools/
+├── local_agent_tools/          # namespace package (no __init__.py needed)
 │   └── webex_status.py    # Webex status / incident check (a local tool)
-├── utils/
+├── utils/                      # namespace package (no __init__.py needed)
 │   ├── mcp_client.py      # MCP tools + resources + prompts + elicitation
 │   ├── websocket.py       # Webex Mercury WebSocket (messages + card taps)
 │   ├── elicit.py          # MCP elicitation → Webex Adaptive Card
