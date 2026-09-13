@@ -1,12 +1,13 @@
 """
-Cisco Live 2026 - LABCOL-1007: Building Your First Webex Bot
+Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 
 - Diego Manuel Jimenez Moreno
 - Mo Eyad Musallam
 """
-# Local tools — tools the bot offers that do NOT come from the MCP server.
-# Merged into the agentic loop via extra_tools + dispatch, so a skill can
-# orchestrate local and MCP tools in one flow.
+# Webex status / incident check — a local agent tool the bot offers that does
+# NOT come from the MCP server. Merged into the agentic loop via
+# extra_tools + dispatch, so a skill can orchestrate local and MCP tools in
+# one flow.
 
 import logging
 import requests

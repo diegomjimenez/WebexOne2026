@@ -1,5 +1,5 @@
 """
-Cisco Live 2026 - LABCOL-1007: Building Your First Webex Bot
+Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 
 - Diego Manuel Jimenez Moreno
 - Mo Eyad Musallam
