@@ -1,0 +1,15 @@
+{
+  "servers": {
+    "webex-messaging": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://mcp.webexapis.com/mcp/webex-messaging",
+        "--header",
+        "Authorization: Bearer WEBEX_MCP_TOKEN"
+      ]
+    }
+  }
+}
