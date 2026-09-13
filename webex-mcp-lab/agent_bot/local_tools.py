@@ -4,61 +4,49 @@ Cisco Live 2026 - LABCOL-1007: Building Your First Webex Bot
 - Diego Manuel Jimenez Moreno
 - Mo Eyad Musallam
 """
-# Local tools module — tools the bot offers that do NOT come from the MCP server.
-# The agentic loop already merges these via extra_tools + dispatch (same path
-# skills_loader uses for load_skill), so a skill can orchestrate a local tool
-# and an MCP tool in one flow. This one checks the public Webex status page.
+# Local tools — tools the bot offers that do NOT come from the MCP server.
+# Merged into the agentic loop via extra_tools + dispatch, so a skill can
+# orchestrate local and MCP tools in one flow.
 
 import logging
-
 import requests
 
 log = logging.getLogger(__name__)
 
-# Public Webex status feed (Statuspage JSON — no auth, no org scope).
-# index.json carries {status:{indicator}, incidents:[...]}.
+# Public Webex status feed — no auth required. /index.json returns components,
+# status, and incidents in ONE call (simpler for the lab than the /api/v2/*.json
+# endpoints, which split the same data across several requests).
 _STATUS_URL = "https://status.webex.com/index.json"
 
-# Map the Statuspage indicator to a human-readable phrase for the model.
-_INDICATOR_TEXT = {
-    "none": "All systems operational",
-    "green": "All systems operational",
-    "minor": "Minor service issue",
-    "major": "Major service outage",
-    "critical": "Critical service outage",
-}
 
-
-# Query the public Webex status page and return a concise, model-friendly summary.
 def check_webex_status() -> str:
-    """Return a one-line Webex platform status, or a safe fallback on any error."""
+    """Return Contact Center + platform status in one line."""
     try:
-        resp = requests.get(_STATUS_URL, timeout=10)
-        if not resp.ok:
-            return f"Webex status unavailable (HTTP {resp.status_code})."
-        data = resp.json()
+        data = requests.get(_STATUS_URL, timeout=10).json()
+        # Contact Center components.
+        cc = [c for c in data.get("components", [])
+              if "contact center" in c.get("name", "").lower()]
+        cc_line = ", ".join(f"{c['name']}: {c['status']}" for c in cc) or "no data"
+        # Platform roll-up.
         indicator = data.get("status", {}).get("indicator", "unknown")
-        description = _INDICATOR_TEXT.get(indicator, "Status unknown")
-        # List any unresolved incidents so the model can weigh them.
-        incidents = [i.get("name", "incident") for i in data.get("incidents", [])]
-        if incidents:
-            return f"Webex status: {description} ({indicator}). Active: {', '.join(incidents)}."
-        return f"Webex status: {description} ({indicator}). No active incidents."
-    except Exception as exc:  # never raise into the agentic loop
-        log.warning("check_webex_status failed: %s", exc)
-        return "Webex status unavailable (could not reach status page)."
+        incidents = [i["name"] for i in data.get("incidents", [])]
+        inc_line = f"Active: {', '.join(incidents)}" if incidents else "No incidents"
+        return f"CC: {cc_line}. Platform: {indicator}. {inc_line}."
+    except Exception:
+        return "Webex status unavailable."
 
 
-# OpenAI function spec for check_webex_status (pass inside extra_tools).
+# OpenAI function spec — pass inside extra_tools.
 def status_tool_spec() -> dict:
     return {"type": "function", "function": {
         "name": "check_webex_status",
-        "description": "Check the public Webex platform status for ongoing incidents. "
-                       "Use this before blaming an agent's configuration.",
+        "description": "Check the public Webex status page for platform or "
+                       "Contact Center incidents. Call before investigating "
+                       "agent configuration issues.",
         "parameters": {"type": "object", "properties": {}},
     }}
 
 
-# Dispatch entry for check_webex_status (merge into the agentic loop dispatch).
+# Dispatch entry — merge into the agentic loop dispatch dict.
 def status_dispatch() -> dict:
     return {"check_webex_status": lambda a: check_webex_status()}
