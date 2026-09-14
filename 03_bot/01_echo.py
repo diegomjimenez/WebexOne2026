@@ -9,7 +9,6 @@ Echo incoming Webex messages back as 'Echo: <text>' over a WebSocket.
 
 import logging
 import os
-from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -18,12 +17,11 @@ from websocket_client import WebSocketClient
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("echo-bot")
 
-load_dotenv(Path(__file__).parent / ".env")
+load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
-    raise SystemExit("Copy .env.example to .env and set BOT_TOKEN")
-
+    raise SystemExit("Set BOT_TOKEN in your .env file")
 
 def handle_message(message):
     # message is the decrypted Webex message: text, roomId, personEmail, ...
@@ -37,7 +35,6 @@ def handle_message(message):
     reply = f"Echo: {text}"
     bot.send_message(message["roomId"], reply)
     log.info(f"Sent to {sender}: {reply}")
-
 
 if __name__ == "__main__":
     bot = WebSocketClient(access_token=BOT_TOKEN, on_message=handle_message)

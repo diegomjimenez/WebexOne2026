@@ -5,12 +5,10 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 - Mo Eyad Musallam
 
 Forward incoming Webex messages to OpenAI and reply with the model output.
-Each attendee uses their own OPENAI_API_KEY from .env (one project per user).
 """
 
 import logging
 import os
-from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
@@ -26,7 +24,7 @@ try:
 except ImportError:
     pass
 
-load_dotenv(Path(__file__).parent / ".env")
+load_dotenv()
 
 OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-nano")
@@ -38,9 +36,9 @@ log = logging.getLogger("llm-bot")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not BOT_TOKEN:
-    raise SystemExit("Copy .env.example to .env and set BOT_TOKEN")
+    raise SystemExit("Set BOT_TOKEN in your .env file")
 if not OPENAI_API_KEY:
-    raise SystemExit("Copy .env.example to .env and set OPENAI_API_KEY")
+    raise SystemExit("Set OPENAI_API_KEY in your .env file")
 
 
 def ask_llm(user_text: str) -> str:
@@ -68,7 +66,6 @@ def handle_message(message):
     sender = message["personEmail"]
     log.info(f"Received from {sender}: {text}")
 
-    # Details stay in the terminal; the user only ever sees ERROR_REPLY.
     try:
         reply = ask_llm(text)
     except requests.exceptions.SSLError:
