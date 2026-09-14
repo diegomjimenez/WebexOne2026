@@ -4,9 +4,9 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 - Diego Manuel Jimenez Moreno
 - Mo Eyad Musallam
 """
-# A Webex bot that fronts ANY MCP server. Tools, resources, and prompts are
-# discovered from whatever server .env points at; the persona lives in a file.
-# Nothing here is tied to a specific server or use case.
+# A Webex bot that fronts one or more MCP servers. Tools, resources, and
+# prompts are discovered from whatever server(s) .env points at; the persona
+# lives in a file. Nothing here is tied to a specific server or use case.
 
 import logging
 import os
@@ -47,25 +47,46 @@ if not bot_token:
     sys.exit("ERROR: BOT_TOKEN is not set in .env")
 
 
-def resolve_mcp_config():
-    """Resolve the MCP server to launch from .env, failing fast if unset.
+def resolve_mcp_configs():
+    """Resolve one or more MCP servers from .env.
 
-    This bot is server-agnostic: there is no hardcoded server default. When the
-    required configuration is missing we exit with a clear, actionable message
-    instead of trying to connect to nothing.
+    Multi-server: reads MCP_SERVER_ARGS_1/CWD_1, MCP_SERVER_ARGS_2/CWD_2, …
+    Single-server fallback: reads the un-suffixed MCP_SERVER_ARGS/CWD.
+    Returns a list of {"name", "command", "args", "cwd"} dicts.
     """
     command = os.getenv("MCP_SERVER_COMMAND", "python")
-    args = os.getenv("MCP_SERVER_ARGS", "").strip()
-    cwd = os.getenv("MCP_SERVER_CWD", "").strip() or "."
-    if not args:
-        sys.exit(
-            "ERROR: MCP_SERVER_ARGS is not set in .env. This bot is "
-            "MCP-server-agnostic — point it at any MCP server, e.g.\n"
-            "  MCP_SERVER_ARGS=<your_server>.py\n"
-            "  MCP_SERVER_CWD=<path to the server's directory>\n"
-            "See .env.example for a runnable example."
-        )
-    return command, [a.strip() for a in args.split(",")], cwd
+    configs = []
+    # Try indexed vars first (MCP_SERVER_ARGS_1, _2, …).
+    for i in range(1, 10):
+        args = os.getenv(f"MCP_SERVER_ARGS_{i}", "").strip()
+        if not args:
+            break
+        cwd = os.getenv(f"MCP_SERVER_CWD_{i}", "").strip() or "."
+        name = os.getenv(f"MCP_SERVER_NAME_{i}", f"server-{i}").strip()
+        configs.append({
+            "name": name,
+            "command": command,
+            "args": [a.strip() for a in args.split(",")],
+            "cwd": cwd,
+        })
+    # Fallback to un-suffixed single-server vars.
+    if not configs:
+        args = os.getenv("MCP_SERVER_ARGS", "").strip()
+        cwd = os.getenv("MCP_SERVER_CWD", "").strip() or "."
+        if not args:
+            sys.exit(
+                "ERROR: No MCP server configured in .env. Set either:\n"
+                "  Multi-server:  MCP_SERVER_ARGS_1, MCP_SERVER_CWD_1, …\n"
+                "  Single-server: MCP_SERVER_ARGS, MCP_SERVER_CWD\n"
+                "See .env.example for a runnable example."
+            )
+        configs.append({
+            "name": "default",
+            "command": command,
+            "args": [a.strip() for a in args.split(",")],
+            "cwd": cwd,
+        })
+    return configs
 
 
 def load_persona():
@@ -83,11 +104,11 @@ def load_persona():
     return _DEFAULT_PERSONA
 
 
-# ── Connect to the MCP server (from .env) ──────────────────────────────────
-_command, _args, _cwd = resolve_mcp_config()
-mcp_client.connect(command=_command, args=_args, cwd=_cwd, interactive=False)
+# ── Connect to MCP server(s) from .env ─────────────────────────────────────
+_configs = resolve_mcp_configs()
+mcp_client.connect_all(_configs, interactive=False)
 
-# Wire the Adaptive Card elicitation bridge.
+# Wire the Adaptive Card elicitation bridge to all connections.
 elicit.init(bot_token)
 mcp_client.set_elicit_bridge(elicit)
 
