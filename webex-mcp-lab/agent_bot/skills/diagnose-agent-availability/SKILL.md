@@ -1,38 +1,35 @@
 ---
 name: diagnose-agent-availability
-description: Use this skill when an admin reports Contact Center agents offline, not receiving calls, or stuck unavailable. Orchestrates a platform status check and the agent MCP tools to find the cause.
+description: Use when an admin reports Contact Center agents offline, not receiving calls, or stuck unavailable. Combines a local status tool with the agent MCP tools to find the cause.
 ---
 
 # Diagnose Agent Availability
 
-## Overview
+One flow, two tool sources — a **local** tool (`check_webex_status`) plus the
+**MCP** tools from `07_agents_server.py`. Severity levels, state meanings, and
+escalation live in the `lab://agent-troubleshooting` resource (auto-loaded into
+context — you don't need to fetch it).
 
-This skill diagnoses why Contact Center agents appear offline or unavailable. It
-deliberately mixes tool sources: a **local** tool (`check_webex_status`, not from
-the MCP server) and the **MCP** agent tools on `07_agents_server.py`.
-
-For severity definitions, state meanings, and escalation policy, consult the
-`lab://agent-troubleshooting` resource (already injected into context by the
-MCP server — you do not need to fetch it).
-
-## When to use
-
-Use when an admin reports agents offline, not receiving calls, or stuck in an
-unavailable state.
+| Step | Tool | Source |
+|------|------|--------|
+| 1. Rule out a platform incident | `check_webex_status` | local |
+| 2. See who's configured | `list_teams`, `list_agents` | MCP |
+| 3. Inspect the affected agent | `get_desktop_profile` | MCP |
+| 4. Classify + report | severity rubric | resource |
 
 ## Steps
 
-1. Call `check_webex_status` first — rule out a platform incident before blaming
-   configuration. This tool is local to the bot, not an MCP server tool.
-   If an incident is active, report it up front.
-2. Call `list_teams`, then `list_agents`, to see who is configured.
-3. For each affected agent, call `get_desktop_profile` on their profile id and
-   compare it against the expected queue configuration.
-4. Classify each finding using the severity rubric in `lab://agent-troubleshooting`.
-5. Summarize the findings and recommend next actions. If unresolved, escalate per
-   the escalation policy in `lab://agent-troubleshooting`.
+1. Ask for the symptom:
+   - Which agent / team? What state shows on their dashboard (e.g. "Not Ready", "Reserved")?
+   - Not appearing at all, or appearing but not getting calls?
+   - When did it start? (config changes take a few minutes to propagate)
+2. Call `check_webex_status` first. If an incident is active, stop and report it.
+3. Call `list_teams`, then `list_agents`, to find the agent and their profile id.
+4. Call `get_desktop_profile` and compare against the expected queue config.
+5. Summarize, classify severity, and recommend next steps.
 
-## Guardrails
+## Guardrail
 
-- Never call `reassign_desktop_profile` yourself — propose it and let the user
-  decide. The server will show a confirmation card when the tool is called.
+Never reassign a profile without approval. When a fix is needed, call
+`reassign_desktop_profile` — the server shows a confirmation card and will not
+proceed until the user approves.

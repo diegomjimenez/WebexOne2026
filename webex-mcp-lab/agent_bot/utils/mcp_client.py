@@ -1,16 +1,17 @@
 """
-Cisco Live 2026 - LABCOL-1007: Building Your First Webex Bot
+Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 
 - Diego Manuel Jimenez Moreno
 - Mo Eyad Musallam
 """
-# MCP Client module — tools + resources + prompts + ELICITATION.
-# diff mcp_client_prompts.py mcp_client_full.py to see exactly what elicitation adds.
+# MCP Client module — tools + resources + prompts + elicitation.
+# Discovers everything from whatever MCP server it is pointed at; it holds no
+# knowledge of any specific server.
 
 import asyncio, json, logging, sys, threading
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
-from mcp import types as mcp_types                                       # NEW
+from mcp import types as mcp_types
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -26,33 +27,33 @@ _resources_text = ""
 _prompts = {}
 _prompt_tools = []
 _prompt_dispatch = {}
-_interactive = False                                                     # NEW
-_elicit_bridge = None                                                    # NEW
-_current_room = None                                                     # NEW
+_interactive = False
+_elicit_bridge = None
+_current_room = None
 
 
-# Elicitation callback — the server asks the user a question mid-call.    NEW
-async def _on_elicit(context, params):                                   # NEW
-    message = getattr(params, "message", "Confirm?")                     # NEW
-    if _interactive:                                                      # NEW
-        answer = input(f"\n⚠ {message}\naccept? [y/N] ").strip().lower() # NEW
-        action = "accept" if answer in ("y", "yes") else "decline"       # NEW
-    elif _elicit_bridge:                                                  # NEW
-        confirmed = _elicit_bridge.request(message)                      # NEW
-        action = "accept" if confirmed else "decline"                    # NEW
-    else:                                                                 # NEW
-        log.info("Auto-accept elicitation: %s "                          # NEW
-                 "(no bridge, auto-accepting)", message)                  # NEW
-        action = "accept"                                                # NEW
-    return mcp_types.ElicitResult(action=action, content={"ok": True})   # NEW
+# Elicitation callback — the server asks the user a question mid-call.
+async def _on_elicit(context, params):
+    message = getattr(params, "message", "Confirm?")
+    if _interactive:
+        answer = input(f"\n⚠ {message}\naccept? [y/N] ").strip().lower()
+        action = "accept" if answer in ("y", "yes") else "decline"
+    elif _elicit_bridge:
+        confirmed = _elicit_bridge.request(message)
+        action = "accept" if confirmed else "decline"
+    else:
+        log.info("Auto-accept elicitation: %s "
+                 "(no bridge, auto-accepting)", message)
+        action = "accept"
+    return mcp_types.ElicitResult(action=action, content={"ok": True})
 
 
 # Spawn the MCP server, initialize the session, discover tools, resources, and prompts.
 def connect(command, args, cwd=".", timeout=30, interactive=False):
     global _loop, _session, _tools, _resources_text, _prompts
     global _prompt_tools, _prompt_dispatch
-    global _interactive                                                  # NEW
-    _interactive = interactive                                           # NEW
+    global _interactive
+    _interactive = interactive
     error = None
 
     async def _run(params):
@@ -61,9 +62,9 @@ def connect(command, args, cwd=".", timeout=30, interactive=False):
         global _prompt_tools, _prompt_dispatch
         try:
             async with stdio_client(params) as (r, w):
-                async with ClientSession(                                # NEW
-                    r, w,                                                 # NEW
-                    elicitation_callback=_on_elicit,                      # NEW
+                async with ClientSession(
+                    r, w,
+                    elicitation_callback=_on_elicit,
                 ) as s:
                     await s.initialize()
                     _session = s
@@ -129,7 +130,7 @@ def connect(command, args, cwd=".", timeout=30, interactive=False):
     print(f"MCP ready — {len(_tools)} tool(s), "
           f"{len(_resources_text)} chars of resource text, "
           f"{len(_prompts)} prompt(s), "
-          f"elicitation={'interactive' if _interactive else 'auto-accept'}",  # NEW
+          f"elicitation={'interactive' if _interactive else 'auto-accept'}",
           file=sys.stderr)
     return _tools
 
@@ -149,16 +150,21 @@ def get_prompt_dispatch():
     return dict(_prompt_dispatch)
 
 
-# Register an elicit bridge (Adaptive Card) for bot mode.                NEW
-def set_elicit_bridge(bridge):                                           # NEW
-    global _elicit_bridge                                                # NEW
-    _elicit_bridge = bridge                                              # NEW
+# Names of the prompts the connected server advertises.
+def get_prompt_names():
+    return list(_prompts)
 
 
-# Set the Webex room id for the next elicitation card.                   NEW
-def set_current_room(room_id):                                           # NEW
-    if _elicit_bridge:                                                   # NEW
-        _elicit_bridge.set_room(room_id)                                 # NEW
+# Register an elicit bridge (Adaptive Card) for bot mode.
+def set_elicit_bridge(bridge):
+    global _elicit_bridge
+    _elicit_bridge = bridge
+
+
+# Set the Webex room id for the next elicitation card.
+def set_current_room(room_id):
+    if _elicit_bridge:
+        _elicit_bridge.set_room(room_id)
 
 
 # Render a server prompt by name and return the messages list.
@@ -184,9 +190,9 @@ def call_tool(name, args):
         res = await _session.call_tool(name, args)
         return "\n".join(b.text for b in res.content if hasattr(b, "text")) or '{"ok":true}'
     try:
-        # Timeout must exceed elicit_bridge.request() timeout (180s)      # NEW
-        # so eliciting tools return real results, not a spurious error.   # NEW
-        return asyncio.run_coroutine_threadsafe(_do(), _loop).result(timeout=210)  # NEW
+        # Timeout must exceed elicit.request()'s timeout (180s) so eliciting
+        # tools return real results, not a spurious error.
+        return asyncio.run_coroutine_threadsafe(_do(), _loop).result(timeout=210)
     except Exception as exc:
         return f"[Tool Error] {exc}"
 
@@ -220,19 +226,25 @@ def agentic_loop(messages, model="gpt-4o-mini", max_iter=10,
 
 
 # Standalone demo — run this file directly to see elicitation in action.
+# The server is resolved from .env; there is no hardcoded server default.
 if __name__ == "__main__":
     import os
-    from dotenv import load_dotenv
     load_dotenv()
-    # Interactive mode — the demo asks you to confirm deletes at the console.
+    server_args = os.getenv("MCP_SERVER_ARGS", "")
+    if not server_args:
+        sys.exit(
+            "ERROR: MCP_SERVER_ARGS is not set. Point it at an MCP server "
+            "in .env (see .env.example), e.g. MCP_SERVER_ARGS=06_full_server.py"
+        )
+    # Interactive mode — the demo asks you to confirm risky actions at the console.
     connect(
         command=os.getenv("MCP_SERVER_COMMAND", "python"),
-        args=os.getenv("MCP_SERVER_ARGS", "06_full_server.py").split(","),
+        args=server_args.split(","),
         cwd=os.getenv("MCP_SERVER_CWD", "."),
-        interactive=True,                                                # NEW
+        interactive=True,
     )
     print("\n--- Elicitation demo ---")
-    print("Calling delete_address_book with a fake id to trigger elicitation.")
+    print("Calling a delete tool with a fake id to trigger elicitation.")
     print("The server will ask you to confirm. Type y or n.\n")
     result = call_tool("delete_address_book",
                        {"address_book_id": "demo-fake-id"})
