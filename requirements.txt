@@ -3,3 +3,4 @@ websockets
 python-dotenv
 certifi
 truststore
+mcp
