@@ -4,7 +4,8 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 - Diego Manuel Jimenez Moreno
 - Mo Eyad Musallam
 
-Test the Service App token against the Messaging MCP server.
+Test the Service App token against the Messaging MCP server:
+list the tools and call webex-search-spaces.
 """
 
 import asyncio
@@ -48,9 +49,15 @@ async def main():
         log.warning("No tools found or connection failed.")
         return
 
-    log.info(f"Success! Found {len(tools)} tool(s) available for the Service App:")
-    for tool in tools:
-        log.info(f"  - {tool.name}: {tool.description}")
+    log.info(f"Success! Found {len(tools)} tool(s) available for the Service App")
+
+    # Call a tool: a machine has no spaces of its own, so expect an empty list
+    arguments = {"max": 10}
+    log.info(f"Calling webex-search-spaces {arguments}")
+    result = await client.call_tool("webex-search-spaces", arguments)
+    if not result:
+        return
+    log.info(result)
 
 if __name__ == "__main__":
     asyncio.run(main())
