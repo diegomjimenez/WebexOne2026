@@ -1,0 +1,26 @@
+"""Several MCP servers, one list of tools. The LLM picks a tool name; we route the call."""
+
+from mcp_client import McpClient
+
+
+class McpHub:
+    def __init__(self, servers):
+        self.clients = [McpClient(token, url) for url, token in servers if token]
+        self._by_name = {}
+
+    async def list_tools(self):
+        tools = []
+        self._by_name = {}
+        for client in self.clients:
+            for tool in await client.list_tools():
+                self._by_name[tool.name] = client
+                tools.append(tool)
+        return tools
+
+    async def call_tool(self, name, arguments=None):
+        if name not in self._by_name:
+            await self.list_tools()
+        client = self._by_name.get(name)
+        if client is None:
+            raise KeyError(f"Unknown MCP tool: {name}")
+        return await client.call_tool(name, arguments)
