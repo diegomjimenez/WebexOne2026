@@ -34,7 +34,7 @@ except (ValueError, TypeError):
 _mcp = None
 _convos = None
 _system = ""
-_model = "gpt-4o-mini"
+_model = None
 _max_history = 20
 
 

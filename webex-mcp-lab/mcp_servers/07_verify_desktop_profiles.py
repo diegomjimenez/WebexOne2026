@@ -6,7 +6,7 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 """
 # Step 07 - Desktop Profile Verification server.
 # Focused on verifying agent-to-desktop-profile assignments.
-# 1 resource (field glossary), 3 read tools, 1 write tool (elicitation).
+# 1 resource (field glossary), 3 read tools, 1 write tool (update profile with elicitation).
 # No prompts — troubleshooting logic lives in the client-side agent skill.
 # Logs go to 07_verify_desktop_profiles.log only.
 
@@ -60,8 +60,9 @@ ORG = f"{CONFIG_API_BASE.rstrip('/')}/organization/{ORG_ID}"
 HEADERS = {"Authorization": f"Bearer {TOKEN}", "Accept": "application/json"}
 
 # WXCC Config API paths.
-USER_PATH = "/user"                        # list/get users (agents)
-DESKTOP_PROFILE_PATH = "/desktop-profile"  # list/get desktop profiles
+USER_PATH = "/user"                              # list/get users (agents)
+PROFILE_LIST_PATH = "/v2/agent-profile"          # list all profiles
+PROFILE_BY_ID_PATH = "/agent-profile"            # get/update a single profile by id
 
 # Create an MCP server instance.
 mcp = MCPServer("verify-desktop-profiles")
@@ -72,11 +73,11 @@ class Confirm(BaseModel):
     ok: bool
 
 
-# Resolver for desktop-profile reassignment.
-async def confirm_reassign(agent_id: str, desktop_profile_id: str) -> Elicit[Confirm]:
+# Resolver for desktop-profile update.
+async def confirm_update(id: str, addressBookId: str) -> Elicit[Confirm]:
     return Elicit(
-        f"Reassign agent '{agent_id}' to desktop profile "
-        f"'{desktop_profile_id}'? This changes what the agent can do.",
+        f"Update desktop profile '{id}' to use address book "
+        f"'{addressBookId}'? This affects ALL agents assigned to this profile.",
         Confirm,
     )
 
@@ -97,6 +98,9 @@ def desktop_profile_reference() -> str:
         "- name: human-readable profile name\n"
         "- id: use this to match against an agent's agentProfileId\n"
         "- description: optional text describing the profile's purpose\n"
+        "- addressBookId: the address book assigned to this profile (use with server 06 tools)\n"
+        "- outdialEnabled: whether agents with this profile can make outbound calls\n"
+        "- active: whether the profile is currently active\n"
         "\n"
         "## What list_agents returns\n"
         "- id: agent identifier\n"
@@ -138,10 +142,10 @@ async def list_agents(limit: int = 50) -> dict:
 @mcp.tool()
 async def list_desktop_profiles(limit: int = 50) -> dict:
     """List all desktop profiles configured in this Contact Center organization."""
-    log.debug("list_desktop_profiles: GET %s%s", ORG, DESKTOP_PROFILE_PATH)
+    log.debug("list_desktop_profiles: GET %s%s", ORG, PROFILE_LIST_PATH)
     async with httpx.AsyncClient(timeout=15) as http:
         r = await http.get(
-            f"{ORG}{DESKTOP_PROFILE_PATH}", headers=HEADERS, params={"pageSize": limit}
+            f"{ORG}{PROFILE_LIST_PATH}", headers=HEADERS, params={"pageSize": limit}
         )
     log.debug("list_desktop_profiles: HTTP %s", r.status_code)
     if r.status_code != 200:
@@ -149,7 +153,13 @@ async def list_desktop_profiles(limit: int = 50) -> dict:
     body = r.json()
     items = body if isinstance(body, list) else body.get("data", [])
     profiles = [
-        {"id": p.get("id"), "name": p.get("name"), "description": p.get("description")}
+        {
+            "id": p.get("id"),
+            "name": p.get("name"),
+            "description": p.get("description"),
+            "addressBookId": p.get("addressBookId"),
+            "active": p.get("active"),
+        }
         for p in items
     ]
     return {"count": len(profiles), "profiles": profiles}
@@ -157,11 +167,11 @@ async def list_desktop_profiles(limit: int = 50) -> dict:
 
 # Get a single desktop profile by id.
 @mcp.tool()
-async def get_desktop_profile(desktop_profile_id: str) -> dict:
-    """Get one desktop profile by id."""
-    log.debug("get_desktop_profile: GET %s%s/%s", ORG, DESKTOP_PROFILE_PATH, desktop_profile_id)
+async def get_desktop_profile(id: str) -> dict:
+    """Get one desktop profile by its id."""
+    log.debug("get_desktop_profile: GET %s%s/%s", ORG, PROFILE_BY_ID_PATH, id)
     async with httpx.AsyncClient(timeout=15) as http:
-        r = await http.get(f"{ORG}{DESKTOP_PROFILE_PATH}/{desktop_profile_id}", headers=HEADERS)
+        r = await http.get(f"{ORG}{PROFILE_BY_ID_PATH}/{id}", headers=HEADERS)
     log.debug("get_desktop_profile: HTTP %s", r.status_code)
     if r.status_code != 200:
         return {"error": f"Webex Contact Center returned HTTP {r.status_code}."}
@@ -170,39 +180,70 @@ async def get_desktop_profile(desktop_profile_id: str) -> dict:
         "id": p.get("id"),
         "name": p.get("name"),
         "description": p.get("description"),
+        "addressBookId": p.get("addressBookId"),
+        "outdialEnabled": p.get("outdialEnabled"),
+        "outdialEntryPointId": p.get("outdialEntryPointId"),
+        "active": p.get("active"),
     }
 
 
-# Reassign an agent's desktop profile after the user confirms via elicitation.
+# Fields the PUT endpoint does not accept (read-only / not in update schema).
+_PROFILE_READ_ONLY = {"links", "createdTime", "lastUpdatedTime"}
+
+
+# Update a desktop profile's address book assignment.
 @mcp.tool()
-async def reassign_desktop_profile(
-    agent_id: str,
-    desktop_profile_id: str,
-    confirm: Annotated[ElicitationResult[Confirm], Resolve(confirm_reassign)],
+async def update_desktop_profile(
+    id: str,
+    addressBookId: str,
+    confirm: Annotated[ElicitationResult[Confirm], Resolve(confirm_update)],
 ) -> dict:
-    """Reassign an agent to a desktop profile. The server asks you to confirm first."""
+    """Update a desktop profile to use a specific address book.
+
+    Pass the profile's id and the target addressBookId.
+    This affects ALL agents assigned to the profile. The server asks you
+    to confirm first.
+    """
     match confirm:
         case AcceptedElicitation(data=Confirm(ok=True)):
-            log.debug("reassign_desktop_profile: GET %s%s/%s", ORG, USER_PATH, agent_id)
+            log.debug(
+                "update_desktop_profile: GET %s%s/%s",
+                ORG, PROFILE_BY_ID_PATH, id,
+            )
             async with httpx.AsyncClient(timeout=15) as http:
-                got = await http.get(f"{ORG}{USER_PATH}/{agent_id}", headers=HEADERS)
-                if got.status_code != 200:
-                    return {"error": f"Could not read agent (HTTP {got.status_code})."}
-                agent = got.json()
-                agent["agentProfileId"] = desktop_profile_id
-                log.debug("reassign_desktop_profile: PUT %s%s/%s", ORG, USER_PATH, agent_id)
-                r = await http.put(
-                    f"{ORG}{USER_PATH}/{agent_id}", headers=HEADERS, json=agent
+                got = await http.get(
+                    f"{ORG}{PROFILE_BY_ID_PATH}/{id}",
+                    headers=HEADERS,
                 )
-            log.debug("reassign_desktop_profile: HTTP %s", r.status_code)
+                if got.status_code != 200:
+                    return {"error": f"Could not read profile (HTTP {got.status_code})."}
+                profile = got.json()
+                for key in _PROFILE_READ_ONLY:
+                    profile.pop(key, None)
+                profile["addressBookId"] = addressBookId
+                log.debug(
+                    "update_desktop_profile: PUT %s%s/%s",
+                    ORG, PROFILE_BY_ID_PATH, id,
+                )
+                r = await http.put(
+                    f"{ORG}{PROFILE_BY_ID_PATH}/{id}",
+                    headers=HEADERS,
+                    json=profile,
+                )
+            log.debug("update_desktop_profile: HTTP %s", r.status_code)
             if r.status_code not in (200, 201):
-                return {"error": f"Webex Contact Center returned HTTP {r.status_code}."}
-            return {"reassigned": True, "agent_id": agent_id,
-                    "desktop_profile_id": desktop_profile_id}
+                body = r.text
+                log.error("update_desktop_profile: response body: %s", body)
+                return {"error": f"Webex Contact Center returned HTTP {r.status_code}.", "details": body}
+            return {
+                "updated": True,
+                "id": id,
+                "addressBookId": addressBookId,
+            }
         case AcceptedElicitation():
-            return {"reassigned": False, "reason": "You chose not to reassign."}
+            return {"updated": False, "reason": "You chose not to update."}
         case DeclinedElicitation() | CancelledElicitation():
-            return {"reassigned": False, "reason": "Confirmation was declined or dismissed."}
+            return {"updated": False, "reason": "Confirmation was declined or dismissed."}
 
 
 # Start the server on stdio and wait for a client to connect.

@@ -28,7 +28,16 @@ load_dotenv()
 # ── Configuration ──────────────────────────────────────────────────────────
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 bot_token   = os.getenv("BOT_TOKEN")
-MODEL       = os.getenv("MODEL", "gpt-4o-mini")
+MODEL       = os.getenv("MODEL", "").strip()
+if not MODEL:
+    sys.exit(
+        "ERROR: MODEL is not set in .env. Set it to the model your OpenAI "
+        "project has access to, e.g.:\n"
+        "  MODEL=gpt-5-nano\n"
+        "  MODEL=gpt-4o\n"
+        "  MODEL=gpt-4o-mini\n"
+        "Any OpenAI-compatible provider works — just set OPENAI_BASE_URL too."
+    )
 MAX_HISTORY = int(os.getenv("MAX_HISTORY", "20"))
 SKILLS_DIR  = os.getenv("SKILLS_DIR", os.path.join(SCRIPT_DIR, "skills"))
 

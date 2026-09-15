@@ -307,7 +307,7 @@ def get_prompt(name, arguments=None):
 
 
 # Agentic loop — LLM picks tools, we call them, repeat until text reply.
-def agentic_loop(messages, model="gpt-4o-mini", max_iter=10,
+def agentic_loop(messages, model, max_iter=10,
                  extra_tools=None, dispatch=None):
     all_tools = list(_tools) + (extra_tools or [])
     msgs = list(messages)
