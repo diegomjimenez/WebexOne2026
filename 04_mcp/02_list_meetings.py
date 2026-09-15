@@ -8,13 +8,11 @@ Call the Meetings MCP tool webex-list-meetings with a fixed date window.
 """
 
 import asyncio
-import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
-from mcp.shared.exceptions import MCPError
 
 from mcp_client import McpClient
 
@@ -45,19 +43,13 @@ async def main():
         "meetingType": "scheduledMeeting",
     }
     log.info(f"Calling webex-list-meetings {arguments}")
-    try:
-        result = await McpClient(MEETING_TOKEN, MEETING_MCP_URL).call_tool(
-            "webex-list-meetings",
-            arguments,
-        )
-    except MCPError as exc:
-        log.error(f"Meetings MCP call failed: {exc}")
+    result = await McpClient(MEETING_TOKEN, MEETING_MCP_URL).call_tool(
+        "webex-list-meetings",
+        arguments,
+    )
+    if not result:
         return
-
-    meetings = json.loads(result).get("data", {}).get("meetings", [])
-    log.info(f"{len(meetings)} scheduled meeting(s):")
-    for meeting in meetings:
-        log.info(f"  {meeting['start']} - {meeting['end']}  {meeting['title']}")
+    log.info(result)
 
 
 if __name__ == "__main__":
