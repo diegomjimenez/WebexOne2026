@@ -44,7 +44,7 @@ ERROR_REPLY = "Sorry, I could not answer that right now. Please try again in a m
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("custom-mcp-bot")
 
-load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-nano")
@@ -52,9 +52,8 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-nano")
 if not OPENAI_API_KEY:
     raise SystemExit("Set OPENAI_API_KEY in your .env file")
 
-# Initialize the Token Manager (reading from the 05_service_apps .env file)
-env_path = str(Path(__file__).resolve().parent.parent / "05_service_apps" / ".env")
-token_manager = TokenManager(env_path=env_path)
+# Initialize the Token Manager (reading from the global .env file)
+token_manager = TokenManager()
 service_app_token = token_manager.get_token()
 
 # 1. Create the remote client (Messaging MCP)

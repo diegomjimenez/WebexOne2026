@@ -9,8 +9,11 @@ from dotenv import load_dotenv, set_key
 log = logging.getLogger("token-manager")
 
 class TokenManager:
-    def __init__(self, env_path=".env"):
-        self.env_path = env_path
+    def __init__(self, env_path=None):
+        if env_path is None:
+            self.env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+        else:
+            self.env_path = env_path
         load_dotenv(self.env_path)
         
         self.client_id = os.getenv("CLIENT_ID")

@@ -32,7 +32,7 @@ QUESTION = "What meetings do I have scheduled this week?"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("mcp-llm")
 
-load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 MEETING_TOKEN = os.getenv("WEBEX_MEETING_MCP_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")

@@ -27,7 +27,7 @@ MEETING_MCP_URL = "https://mcp.webexapis.com/mcp/webex-meeting"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("mcp-list-tools")
 
-load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 MEETING_TOKEN = os.getenv("WEBEX_MEETING_MCP_TOKEN")
 if not MEETING_TOKEN:

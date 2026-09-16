@@ -27,7 +27,6 @@ DEVICE_DATA = {
     "systemVersion": "0.1",
 }
 
-
 class WebSocketClient:
     """Opens a Webex Mercury WebSocket and calls on_message(message) for each new post."""
 

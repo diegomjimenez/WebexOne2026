@@ -32,7 +32,7 @@ QUESTION = "What meetings do I have this week, and how many spaces do I have?"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("mcp-hub")
 
-load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 MESSAGING_TOKEN = os.getenv("WEBEX_MESSAGING_MCP_TOKEN")
 MEETING_TOKEN = os.getenv("WEBEX_MEETING_MCP_TOKEN")
