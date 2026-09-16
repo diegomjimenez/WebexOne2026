@@ -171,7 +171,7 @@ Now, we will connect to the MCP server using the client. In this first exercise,
         except ImportError:
             pass
         
-        MEETING_MCP_URL = os.getenv("WEBEX_MEETING_MCP_URL", "https://mcp.webexapis.com/mcp/webex-meeting")
+        MEETING_MCP_URL = "https://mcp.webexapis.com/mcp/webex-meeting"
         
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
         log = logging.getLogger("mcp-list-tools")
@@ -251,7 +251,7 @@ Now that we have listed the tools, we will write the code that actually calls a 
         except ImportError:
             pass
         
-        MEETING_MCP_URL = os.getenv("WEBEX_MEETING_MCP_URL", "https://mcp.webexapis.com/mcp/webex-meeting")
+        MEETING_MCP_URL = "https://mcp.webexapis.com/mcp/webex-meeting"
         
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
         log = logging.getLogger("mcp-list-meetings")
@@ -396,7 +396,7 @@ In this scenario, the LLM will choose which tool to use from the catalog. We wil
         except ImportError:
             pass
         
-        MEETING_MCP_URL = os.getenv("WEBEX_MEETING_MCP_URL", "https://mcp.webexapis.com/mcp/webex-meeting")
+        MEETING_MCP_URL = "https://mcp.webexapis.com/mcp/webex-meeting"
         QUESTION = "What meetings do I have scheduled this week?"
         
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -525,8 +525,8 @@ So far we have only added one Webex Meeting MCP Server. Now, we will also add th
         except ImportError:
             pass
         
-        MESSAGING_MCP_URL = os.getenv("WEBEX_MESSAGING_MCP_URL", "https://mcp.webexapis.com/mcp/webex-messaging")
-        MEETING_MCP_URL = os.getenv("WEBEX_MEETING_MCP_URL", "https://mcp.webexapis.com/mcp/webex-meeting")
+        MESSAGING_MCP_URL = "https://mcp.webexapis.com/mcp/webex-messaging"
+        MEETING_MCP_URL = "https://mcp.webexapis.com/mcp/webex-meeting"
         QUESTION = "What meetings do I have this week, and how many spaces do I have?"
         
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -642,8 +642,8 @@ Now, as we did in the previous section, we will combine what we have done to pro
         except ImportError:
             pass
         
-        MESSAGING_MCP_URL = os.getenv("WEBEX_MESSAGING_MCP_URL", "https://mcp.webexapis.com/mcp/webex-messaging")
-        MEETING_MCP_URL = os.getenv("WEBEX_MEETING_MCP_URL", "https://mcp.webexapis.com/mcp/webex-meeting")
+        MESSAGING_MCP_URL = "https://mcp.webexapis.com/mcp/webex-messaging"
+        MEETING_MCP_URL = "https://mcp.webexapis.com/mcp/webex-meeting"
         ERROR_REPLY = "Sorry, I could not answer that right now. Please try again in a moment."
         
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -828,8 +828,8 @@ In this case, we have built a card that will be sent as a summary when we have m
         except ImportError:
             pass
         
-        MESSAGING_MCP_URL = os.getenv("WEBEX_MESSAGING_MCP_URL", "https://mcp.webexapis.com/mcp/webex-messaging")
-        MEETING_MCP_URL = os.getenv("WEBEX_MEETING_MCP_URL", "https://mcp.webexapis.com/mcp/webex-meeting")
+        MESSAGING_MCP_URL = "https://mcp.webexapis.com/mcp/webex-messaging"
+        MEETING_MCP_URL = "https://mcp.webexapis.com/mcp/webex-meeting"
         MESSAGES_URL = "https://webexapis.com/v1/messages"
         CARD_CONTENT_TYPE = "application/vnd.microsoft.card.adaptive"
         ERROR_REPLY = "Sorry, I could not answer that right now. Please try again in a moment."
