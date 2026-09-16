@@ -29,7 +29,7 @@ MESSAGING_MCP_URL = "https://mcp.webexapis.com/mcp/webex-messaging"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("mcp-service-app")
 
-load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+load_dotenv()
 
 # We use the token generated from the UI or the refresh script
 SERVICE_APP_TOKEN = os.getenv("ACCESS_TOKEN")

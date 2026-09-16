@@ -61,7 +61,7 @@ SEND_MEETINGS_CARD = {
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("mcp-card-bot")
 
-load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 MESSAGING_TOKEN = os.getenv("WEBEX_MESSAGING_MCP_TOKEN")

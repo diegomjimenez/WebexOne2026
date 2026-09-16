@@ -24,7 +24,7 @@ try:
 except ImportError:
     pass
 
-load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+load_dotenv()
 
 OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-nano")

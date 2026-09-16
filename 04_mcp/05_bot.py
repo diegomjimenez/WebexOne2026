@@ -36,7 +36,7 @@ ERROR_REPLY = "Sorry, I could not answer that right now. Please try again in a m
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("mcp-bot")
 
-load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 MESSAGING_TOKEN = os.getenv("WEBEX_MESSAGING_MCP_TOKEN")
