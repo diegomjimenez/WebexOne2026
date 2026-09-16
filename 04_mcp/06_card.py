@@ -31,8 +31,8 @@ try:
 except ImportError:
     pass
 
-MESSAGING_MCP_URL = os.getenv("WEBEX_MESSAGING_MCP_URL", "https://mcp.webexapis.com/mcp/webex-messaging")
-MEETING_MCP_URL = os.getenv("WEBEX_MEETING_MCP_URL", "https://mcp.webexapis.com/mcp/webex-meeting")
+MESSAGING_MCP_URL = "https://mcp.webexapis.com/mcp/webex-messaging"
+MEETING_MCP_URL = "https://mcp.webexapis.com/mcp/webex-meeting"
 MESSAGES_URL = "https://webexapis.com/v1/messages"
 CARD_CONTENT_TYPE = "application/vnd.microsoft.card.adaptive"
 ERROR_REPLY = "Sorry, I could not answer that right now. Please try again in a moment."
