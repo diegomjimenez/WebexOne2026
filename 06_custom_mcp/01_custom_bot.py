@@ -38,7 +38,7 @@ try:
 except ImportError:
     pass
 
-MESSAGING_MCP_URL = "https://mcp.webexapis.com/mcp/webex-messaging"
+MESSAGING_MCP_URL = os.getenv("WEBEX_MESSAGING_MCP_URL", "https://mcp.webexapis.com/mcp/webex-messaging")
 ERROR_REPLY = "Sorry, I could not answer that right now. Please try again in a moment."
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

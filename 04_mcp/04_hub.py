@@ -25,8 +25,8 @@ try:
 except ImportError:
     pass
 
-MESSAGING_MCP_URL = "https://mcp.webexapis.com/mcp/webex-messaging"
-MEETING_MCP_URL = "https://mcp.webexapis.com/mcp/webex-meeting"
+MESSAGING_MCP_URL = os.getenv("WEBEX_MESSAGING_MCP_URL", "https://mcp.webexapis.com/mcp/webex-messaging")
+MEETING_MCP_URL = os.getenv("WEBEX_MEETING_MCP_URL", "https://mcp.webexapis.com/mcp/webex-meeting")
 QUESTION = "What meetings do I have this week, and how many spaces do I have?"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

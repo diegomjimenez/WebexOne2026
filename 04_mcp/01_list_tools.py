@@ -22,7 +22,7 @@ try:
 except ImportError:
     pass
 
-MEETING_MCP_URL = "https://mcp.webexapis.com/mcp/webex-meeting"
+MEETING_MCP_URL = os.getenv("WEBEX_MEETING_MCP_URL", "https://mcp.webexapis.com/mcp/webex-meeting")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("mcp-list-tools")
