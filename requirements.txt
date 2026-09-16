@@ -1,7 +1,8 @@
 requests
 websockets
-python-dotenv
 certifi
 truststore
-mcp
 openai
+mcp>=2.1,<3
+httpx>=0.27
+python-dotenv>=1.0
