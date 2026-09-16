@@ -17,7 +17,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # Add paths to import from other labs
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "05_serviceapps"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "05_service_apps"))
 from token_manager import TokenManager
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "04_mcp"))
@@ -52,8 +52,8 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-nano")
 if not OPENAI_API_KEY:
     raise SystemExit("Set OPENAI_API_KEY in your .env file")
 
-# Initialize the Token Manager (reading from the 05_serviceapps .env file)
-env_path = str(Path(__file__).resolve().parent.parent / "05_serviceapps" / ".env")
+# Initialize the Token Manager (reading from the 05_service_apps .env file)
+env_path = str(Path(__file__).resolve().parent.parent / "05_service_apps" / ".env")
 token_manager = TokenManager(env_path=env_path)
 service_app_token = token_manager.get_token()
 
