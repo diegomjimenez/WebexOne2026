@@ -28,13 +28,13 @@ from pydantic import BaseModel
 # Load credentials from .env.
 load_dotenv()
 
-TOKEN = os.environ.get("WEBEX_ACCESS_TOKEN")
+TOKEN = os.environ.get("ACCESS_TOKEN")
 ORG_ID = os.environ.get("WEBEX_ORG_ID")
 CONFIG_API_BASE = os.environ.get("WXCC_CONFIG_API_BASE", "")
 
 # Stop early if any credential is missing.
 for _name, _value in (
-    ("WEBEX_ACCESS_TOKEN", TOKEN),
+    ("ACCESS_TOKEN", TOKEN),
     ("WEBEX_ORG_ID", ORG_ID),
     ("WXCC_CONFIG_API_BASE", CONFIG_API_BASE),
 ):
