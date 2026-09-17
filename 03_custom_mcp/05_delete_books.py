@@ -6,6 +6,7 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 """
 # Step 05 - deleting with a safety net: elicitation asks "are you sure?" mid-call.
 
+import logging
 import os
 import sys
 from typing import Annotated
@@ -13,6 +14,9 @@ from typing import Annotated
 import httpx
 from dotenv import load_dotenv
 from mcp.server import MCPServer
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+log = logging.getLogger("delete-books")
 
 # Elicitation imports: the resolver pattern lets the server ask the user a question mid-call.
 from mcp.server.mcpserver import (
@@ -46,7 +50,7 @@ ORG = f"{CONFIG_API_BASE.rstrip('/')}/organization/{ORG_ID}"
 HEADERS = {"Authorization": f"Bearer {TOKEN}", "Accept": "application/json"}
 
 # Create an MCP server instance.
-mcp = MCPServer("webex-mcp-lab-05")
+mcp = MCPServer("delete-books")
 
 
 # The confirmation form the user sees: one boolean field.
@@ -115,8 +119,8 @@ async def delete_entry(
 
 # Start the server on stdio and wait for a client to connect.
 if __name__ == "__main__":
-    print(
-        "webex-mcp-lab-05 running on stdio - waiting for a client (Ctrl+C to stop).",
-        file=sys.stderr,
-    )
-    mcp.run()
+    log.info("delete-books running on stdio - waiting for a client (Ctrl+C to stop).")
+    try:
+        mcp.run()
+    except KeyboardInterrupt:
+        log.info("Stopped.")
