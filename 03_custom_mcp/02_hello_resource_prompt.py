@@ -7,7 +7,6 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 # Step 02 - all three MCP primitives (tool, resource, prompt) without credentials.
 
 import logging
-import sys
 from mcp.server import MCPServer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

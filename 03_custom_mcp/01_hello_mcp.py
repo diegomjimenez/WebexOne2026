@@ -8,7 +8,6 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 
 import logging
 import re
-import sys
 from mcp.server import MCPServer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
