@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 from llm import as_openai_tools, run_turn
 from mcp_hub import McpHub
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "03_bot"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "05_bot"))
 from websocket_client import WebSocketClient
 
 try:
