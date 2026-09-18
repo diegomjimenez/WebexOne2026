@@ -1,10 +1,15 @@
-"""MCP client: one session per server URL, list tools, and call them."""
+"""MCP client: one session per server, list tools, and call them.
+
+Remote Webex MCP: URL + Bearer token (Streamable HTTP).
+Local custom MCP: command + args (stdio), same as VS Code in Lab 3.
+"""
 
 import logging
 import traceback
 from contextlib import asynccontextmanager
 
 from mcp import ClientSession
+from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.streamable_http import streamable_http_client
 from mcp.shared._httpx_utils import create_mcp_http_client
 
@@ -14,14 +19,27 @@ logging.getLogger("mcp.client.streamable_http").addFilter(
 
 
 class McpClient:
-    """One MCP session = one server URL + that server's token."""
+    """One MCP session = one remote URL + token, or one local stdio command."""
 
-    def __init__(self, access_token, url):
+    def __init__(self, access_token=None, url=None, command=None, args=None, cwd=None):
         self.access_token = access_token
         self.url = url
+        self.command = command
+        self.args = args or []
+        self.cwd = cwd
 
     @asynccontextmanager
     async def session(self):
+        if self.command:
+            params = StdioServerParameters(
+                command=self.command, args=self.args, cwd=self.cwd
+            )
+            async with stdio_client(params) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    yield session
+            return
+
         http = create_mcp_http_client(headers={"Authorization": f"Bearer {self.access_token}"})
         async with http:
             async with streamable_http_client(self.url, http_client=http) as (read, write):

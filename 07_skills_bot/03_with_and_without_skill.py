@@ -63,18 +63,10 @@ if not OPENAI_API_KEY:
     raise SystemExit("Set OPENAI_API_KEY in your .env file")
 
 # ---------------------------------------------------------------------------
-# Skill loader (lightweight — mirrors 01_what_is_a_skill.py)
+# Skill loader — uses the shared SkillLoader class
 # ---------------------------------------------------------------------------
 
-
-def load_skill_body(skills_dir, name):
-    """Read the full SKILL.md body for a skill by name."""
-    md = Path(skills_dir) / name / "SKILL.md"
-    if not md.is_file():
-        raise FileNotFoundError(f"SKILL.md not found at {md}")
-    text = md.read_text(encoding="utf-8")
-    parts = text.split("---", 2)
-    return parts[2].strip() if len(parts) >= 3 else text
+from skill_loader import SkillLoader
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +178,11 @@ async def main():
     if not use_mcp:
         log.info("WEBEX_MEETING_MCP_TOKEN not set — using sample meeting data.")
 
-    skill_body = load_skill_body(SKILLS_DIR, SKILL_NAME)
+    loader = SkillLoader(str(SKILLS_DIR))
+    skill = loader.get_skill(SKILL_NAME)
+    if not skill:
+        raise SystemExit(f"Skill '{SKILL_NAME}' not found in {SKILLS_DIR}")
+    skill_body = skill.instructions
 
     # --- Run 1: WITHOUT skill ---
     log.info("Run 1: WITHOUT skill (plain 04_mcp agent)")

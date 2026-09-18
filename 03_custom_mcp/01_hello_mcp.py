@@ -6,12 +6,15 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 """
 # Step 01 - the smallest MCP server: one tool, no network, no token.
 
+import logging
 import re
-import sys
 from mcp.server import MCPServer
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+log = logging.getLogger("hello-mcp")
+
 # Create an MCP server instance.
-mcp = MCPServer("webex-mcp-lab-01")
+mcp = MCPServer("hello-mcp")
 
 
 # Register a tool that cleans a phone number to E.164 format.
@@ -26,8 +29,8 @@ async def format_phone(number: str) -> str:
 
 # Start the server on stdio and wait for a client to connect.
 if __name__ == "__main__":
-    print(
-        "webex-mcp-lab-01 running on stdio - waiting for a client (Ctrl+C to stop).",
-        file=sys.stderr,
-    )
-    mcp.run()
+    log.info("hello-mcp running on stdio - waiting for a client (Ctrl+C to stop).")
+    try:
+        mcp.run()
+    except KeyboardInterrupt:
+        log.info("Stopped.")

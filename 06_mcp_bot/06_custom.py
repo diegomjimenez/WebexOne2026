@@ -4,7 +4,7 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 - Diego Manuel Jimenez Moreno
 - Mo Eyad Musallam
 
-Connecting the LLM with the MCP hub to a Webex bot.
+Same bot as 05_bot.py, plus the custom MCP server from Lab 3 over stdio.
 """
 
 import asyncio
@@ -17,9 +17,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from llm import as_openai_tools, run_turn
+from mcp_client import McpClient
 from mcp_hub import McpHub
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "03_bot"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "05_bot"))
 from websocket_client import WebSocketClient
 
 try:
@@ -33,29 +34,42 @@ MESSAGING_MCP_URL = "https://mcp.webexapis.com/mcp/webex-messaging"
 MEETING_MCP_URL = "https://mcp.webexapis.com/mcp/webex-meeting"
 ERROR_REPLY = "Sorry, I could not answer that right now. Please try again in a moment."
 
+LAB_ROOT = Path(__file__).resolve().parent.parent
+CUSTOM_SERVER = LAB_ROOT / "03_custom_mcp" / "03_read_books.py"
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-log = logging.getLogger("mcp-bot")
+log = logging.getLogger("mcp-custom-bot")
 
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 MESSAGING_TOKEN = os.getenv("WEBEX_MESSAGING_MCP_TOKEN")
 MEETING_TOKEN = os.getenv("WEBEX_MEETING_MCP_TOKEN")
+ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-nano")
 if not BOT_TOKEN:
     raise SystemExit("Set BOT_TOKEN in your .env file")
 if not OPENAI_API_KEY:
     raise SystemExit("Set OPENAI_API_KEY in your .env file")
+if not ACCESS_TOKEN:
+    raise SystemExit("Set ACCESS_TOKEN in your .env file (Service App token from Lab 2)")
 if not MESSAGING_TOKEN and not MEETING_TOKEN:
     raise SystemExit(
         "Set WEBEX_MESSAGING_MCP_TOKEN and/or WEBEX_MEETING_MCP_TOKEN in your .env file"
     )
 
+custom = McpClient(
+    command=sys.executable,
+    args=[str(CUSTOM_SERVER)],
+    cwd=str(LAB_ROOT),
+)
+
 hub = McpHub(
     [
         (MESSAGING_MCP_URL, MESSAGING_TOKEN),
         (MEETING_MCP_URL, MEETING_TOKEN),
+        custom,
     ]
 )
 
@@ -69,6 +83,7 @@ async def answer(question, sender):
             "role": "system",
             "content": (
                 f"You are a Webex assistant helping {sender}. Today is {today} (UTC). "
+                "You can use Messaging, Meetings, and Contact Center address-book tools. "
                 "Answer only from tool results, never from memory, and reply in a short "
                 "friendly chat message."
             ),

@@ -5,7 +5,14 @@ from mcp_client import McpClient
 
 class McpHub:
     def __init__(self, servers):
-        self.clients = [McpClient(token, url) for url, token in servers if token]
+        self.clients = []
+        for item in servers:
+            if isinstance(item, McpClient):
+                self.clients.append(item)
+            else:
+                url, token = item
+                if token:
+                    self.clients.append(McpClient(token, url))
         self._by_name = {}
 
     async def list_tools(self):

@@ -6,11 +6,14 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 """
 # Step 02 - all three MCP primitives (tool, resource, prompt) without credentials.
 
-import sys
+import logging
 from mcp.server import MCPServer
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+log = logging.getLogger("hello-resource-prompt")
+
 # Create an MCP server instance.
-mcp = MCPServer("webex-mcp-lab-02")
+mcp = MCPServer("hello-resource-prompt")
 
 
 # Register a tool that counts words and characters in a piece of text.
@@ -47,8 +50,8 @@ def review_greeting(greeting: str = "") -> str:
 
 # Start the server on stdio and wait for a client to connect.
 if __name__ == "__main__":
-    print(
-        "webex-mcp-lab-02 running on stdio - waiting for a client (Ctrl+C to stop).",
-        file=sys.stderr,
-    )
-    mcp.run()
+    log.info("hello-resource-prompt running on stdio - waiting for a client (Ctrl+C to stop).")
+    try:
+        mcp.run()
+    except KeyboardInterrupt:
+        log.info("Stopped.")
