@@ -1,0 +1,8 @@
+# Dependencies for the 07_skills lab section.
+# These also cover the 04_mcp modules that 03_with_and_without_skill.py imports.
+
+mcp>=1.0
+httpx
+requests
+python-dotenv
+truststore       # optional: uses OS trust store for corporate HTTPS inspection
