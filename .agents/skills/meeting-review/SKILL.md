@@ -1,86 +1,27 @@
 ---
 name: meeting-review
 description: >-
-  Use when a user asks about their meetings, schedule, or asks you to review
-  or triage meetings for a person. Do not just list meetings — investigate
-  each one across all available Webex Meeting tools: check who joined, whether
-  a summary was captured, whether a recording or transcript exists, and flag
-  anything missing. Produce prioritized actions.
+  Use when a user asks to review or prepare for upcoming meetings.
+  Check each meeting for agenda, invitees, and scheduling conflicts.
+  Flag anything missing and produce a preparation checklist.
+  Do not use for simple meeting listing or lookup requests.
 ---
 
 # Meeting Review
 
 ## What this skill does
 
-You receive a meeting query and perform a **complete review** — not a list.
-For every meeting, you check across all available Webex Meeting capabilities:
-schedule, participants, summary, recording, and transcript. You flag what is
-missing and produce prioritized actions.
-
-## How to investigate each meeting
-
-For every meeting returned by the schedule tool:
-
-### Past meetings — check all of these:
-
-1. **Participants**: who was invited vs who actually joined?
-   Flag if attendance was low or key people were absent.
-2. **Summary**: is an AI-generated meeting summary available?
-   Flag `NO SUMMARY` if missing.
-3. **Recording**: is a recording available?
-   Flag `NO RECORDING` if missing.
-4. **Transcript**: is a transcript available?
-   Flag `NO TRANSCRIPT` if missing.
-5. **Missed meeting**: if the meeting state is "missed" or no one joined,
-   flag it as `MISSED — produced nothing` and recommend rescheduling.
-   Note how many days overdue it is.
-
-### Upcoming meetings — check these:
-
-1. **Agenda**: does the meeting have an agenda or description?
-   Flag `NO AGENDA` if missing.
-2. **Participants**: who is invited? Flag if no invitees beyond the host.
-3. **Time until meeting**: note how much time remains to prepare.
-
-## Output format
-
-```
-MEETING REVIEW for <user or query context>
-====================================================
-
-!! ACTION REQUIRED — <title> | <date time> | MISSED
-   Participants: <N> invited — <who joined or "check attendance">
-   Summary:     <available / NOT AVAILABLE>
-   Recording:   <available / NOT AVAILABLE>
-   Transcript:  <available / NOT AVAILABLE>
-   --> <action recommendation>
-
--- UPCOMING — <title> | <date time> | <time until>
-   Participants: <who is invited>
-   Agenda:      <present / NONE>
-   --> <action recommendation>
-
-PRIORITY ACTIONS (in order):
-1. <most urgent action>
-2. <next action>
-3. ...
-====================================================
-```
+Check upcoming meetings for readiness. Flag missing agendas, missing
+invitees, and scheduling conflicts. Produce a short preparation checklist.
 
 ## Rules
 
-1. **Always investigate multiple dimensions.** Do not stop at listing the
-   schedule. For each meeting, call the tools for participants, summary,
-   recording, and transcript. This is the core value of this skill.
-2. **Flag every gap.** If any dimension is missing or empty, flag it
-   explicitly with the label shown above (NO SUMMARY, NO RECORDING, etc).
-3. **Quantify urgency.** For missed meetings, state how many days overdue.
-   For upcoming meetings, state how much time remains.
-4. **Prioritize actions.** List actions in urgency order: missed meetings
-   first (they need rescheduling), then upcoming meetings needing prep.
-5. **Separate past from upcoming.** Use `!! ACTION REQUIRED` for past
-   meetings with problems. Use `-- UPCOMING` for future meetings.
-6. **Be factual.** Only use data from tool results. Never invent
-   participants, summaries, or recordings.
-7. **Keep it scannable.** One block per meeting, flags on their own lines,
-   actions at the bottom.
+1. List meetings in chronological order with start time and title.
+2. For each meeting, check:
+   - Does it have an agenda or description? Flag `NO AGENDA` if missing.
+   - Are there invitees beyond the host? Flag `NO INVITEES` if empty.
+   - Does it overlap or conflict with another meeting? Flag `CONFLICT`.
+3. Produce a `PREPARATION CHECKLIST` at the bottom with concrete actions.
+4. Be factual. Use only data from tools. Never invent attendees or agendas.
+5. Keep it short. One line per meeting plus flags.
+6. If no upcoming meetings exist, say so clearly.
