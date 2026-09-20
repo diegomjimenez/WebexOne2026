@@ -88,6 +88,19 @@ async def list_reports() -> dict:
         ]
     }
 
+@mcp.tool()
+async def get_meeting_qualities(meeting_id: str) -> dict:
+    """Analytics and diagnostics for meetings."""
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get(
+            f"https://webexapis.com/v1/meeting/qualities?meetingId={meeting_id}",
+            headers=HEADERS
+        )
+    if r.status_code != 200:
+        return {"error": f"HTTP {r.status_code}: {r.text}"}
+    
+    return r.json()
+
 if __name__ == "__main__":
     log.info("webex-troubleshooting-mcp running on stdio - waiting for a client (Ctrl+C to stop).")
     try:

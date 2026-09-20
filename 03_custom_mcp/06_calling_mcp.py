@@ -87,6 +87,19 @@ async def list_devices(max_results: int = 10) -> dict:
         ]
     }
 
+@mcp.tool()
+async def get_location_call_settings(location_id: str) -> dict:
+    """Manage specific calling settings for a location."""
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get(
+            f"https://webexapis.com/v1/telephony/config/locations/{location_id}/callSettings",
+            headers=HEADERS
+        )
+    if r.status_code != 200:
+        return {"error": f"HTTP {r.status_code}: {r.text}"}
+    
+    return r.json()
+
 if __name__ == "__main__":
     log.info("webex-calling-mcp running on stdio - waiting for a client (Ctrl+C to stop).")
     try:
