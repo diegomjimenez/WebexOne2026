@@ -22,11 +22,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger("troubleshooting-mcp-complex")
 
 load_dotenv()
-TOKEN = os.environ.get("PERSONAL_ACCESS_TOKEN")
+TOKEN = os.environ.get("ACCESS_TOKEN")
 ORG_ID = os.environ.get("WEBEX_ORG_ID")
 
 if not TOKEN or not ORG_ID:
-    sys.exit("PERSONAL_ACCESS_TOKEN and WEBEX_ORG_ID must be set in your .env file.")
+    sys.exit("ACCESS_TOKEN and WEBEX_ORG_ID must be set in your .env file.")
 
 HEADERS = {"Authorization": f"Bearer {TOKEN}", "Accept": "application/json"}
 mcp = MCPServer("webex-troubleshooting-complex")
