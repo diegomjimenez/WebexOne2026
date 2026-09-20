@@ -1,15 +1,9 @@
 {
   "servers": {
-    "webex-messaging": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "-y",
-        "mcp-remote",
-        "https://mcp.webexapis.com/mcp/webex-messaging",
-        "--header",
-        "Authorization: Bearer WEBEX_MCP_TOKEN"
-      ]
+    "webex-mcp-lab": {
+      "command": "${workspaceFolder}/../webexone/bin/python",
+      "args": ["01_hello_mcp.py"],
+      "cwd": "${workspaceFolder}"
     }
   }
 }
