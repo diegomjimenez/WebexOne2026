@@ -1,3 +1,9 @@
+"""
+Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
+
+- Diego Manuel Jimenez Moreno
+- Mo Eyad Musallam
+"""
 import logging
 import os
 import sys
@@ -77,6 +83,27 @@ async def list_licenses() -> dict:
         "licenses": [
             {"id": l.get("id"), "name": l.get("name"), "consumedUnits": l.get("consumedUnits"), "totalUnits": l.get("totalUnits")}
             for l in licenses
+        ]
+    }
+
+@mcp.tool()
+async def list_roles(max_results: int = 20) -> dict:
+    """List admin roles available in the organization."""
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get(
+            "https://webexapis.com/v1/roles",
+            headers=HEADERS,
+            params={"max": max_results}
+        )
+    if r.status_code != 200:
+        return {"error": f"HTTP {r.status_code}: {r.text}"}
+    
+    roles = r.json().get("items", [])
+    return {
+        "count": len(roles),
+        "roles": [
+            {"id": role.get("id"), "name": role.get("name"), "description": role.get("description")}
+            for role in roles
         ]
     }
 

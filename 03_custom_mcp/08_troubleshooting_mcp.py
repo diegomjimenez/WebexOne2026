@@ -1,3 +1,9 @@
+"""
+Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
+
+- Diego Manuel Jimenez Moreno
+- Mo Eyad Musallam
+"""
 import logging
 import os
 import sys
@@ -59,6 +65,26 @@ async def list_admin_audit_events(days_back: int = 7, max_results: int = 10) -> 
         "events": [
             {"id": e.get("id"), "actionText": e.get("actionText"), "actorOrgName": e.get("actorOrgName"), "created": e.get("created")}
             for e in events
+        ]
+    }
+
+@mcp.tool()
+async def list_reports() -> dict:
+    """List recent usage and activity reports generated in the organization."""
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get(
+            "https://webexapis.com/v1/reports",
+            headers=HEADERS
+        )
+    if r.status_code != 200:
+        return {"error": f"HTTP {r.status_code}: {r.text}"}
+    
+    reports = r.json().get("items", [])
+    return {
+        "count": len(reports),
+        "reports": [
+            {"id": rep.get("Id"), "title": rep.get("title"), "status": rep.get("status")}
+            for rep in reports
         ]
     }
 
