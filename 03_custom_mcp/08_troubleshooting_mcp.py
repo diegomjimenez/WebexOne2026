@@ -63,7 +63,13 @@ async def list_admin_audit_events(days_back: int = 7, max_results: int = 10) -> 
     return {
         "count": len(events),
         "events": [
-            {"id": e.get("id"), "actionText": e.get("actionText"), "actorOrgName": e.get("actorOrgName"), "created": e.get("created")}
+            {
+                "id": e.get("id"),
+                "created": e.get("created"),
+                "actionText": e.get("data", {}).get("actionText"),
+                "actorEmail": e.get("data", {}).get("actorEmail"),
+                "category": e.get("data", {}).get("eventCategory"),
+            }
             for e in events
         ]
     }
@@ -89,12 +95,45 @@ async def list_reports() -> dict:
     }
 
 @mcp.tool()
-async def get_meeting_qualities(meeting_id: str) -> dict:
-    """Analytics and diagnostics for meetings."""
+async def list_ended_meetings(days_back: int = 7, max_results: int = 10) -> dict:
+    """List meetings that already ended, so their IDs can be used for quality analysis."""
+    now = datetime.now(timezone.utc)
+    past = now - timedelta(days=days_back)
+
+    params = {
+        "meetingType": "meeting",
+        "state": "ended",
+        "from": past.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "to": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "max": max_results
+    }
+
     async with httpx.AsyncClient(timeout=15) as http:
         r = await http.get(
-            f"https://webexapis.com/v1/meeting/qualities?meetingId={meeting_id}",
-            headers=HEADERS
+            "https://webexapis.com/v1/meetings",
+            headers=HEADERS,
+            params=params
+        )
+    if r.status_code != 200:
+        return {"error": f"HTTP {r.status_code}: {r.text}"}
+
+    meetings = r.json().get("items", [])
+    return {
+        "count": len(meetings),
+        "meetings": [
+            {"id": m.get("id"), "title": m.get("title"), "start": m.get("start"), "end": m.get("end")}
+            for m in meetings
+        ]
+    }
+
+@mcp.tool()
+async def get_meeting_qualities(meeting_id: str) -> dict:
+    """Analytics and diagnostics for an ended meeting. Use the ID from list_ended_meetings."""
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get(
+            "https://analytics.webexapis.com/v1/meeting/qualities",
+            headers=HEADERS,
+            params={"meetingId": meeting_id}
         )
     if r.status_code != 200:
         return {"error": f"HTTP {r.status_code}: {r.text}"}

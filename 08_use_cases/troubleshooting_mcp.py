@@ -81,11 +81,45 @@ async def list_admin_audit_events(days_back: int = 7, max_results: int = 25) -> 
     return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}: {r.text}"}
 
 @mcp.tool()
-async def get_meeting_qualities(meeting_id: str) -> dict:
-    """Analytics and diagnostics for meetings."""
+async def list_ended_meetings(days_back: int = 7, max_results: int = 25) -> dict:
+    """List meetings that already ended, so their IDs can be used for quality analysis."""
+    now = datetime.now(timezone.utc)
+    past = now - timedelta(days=days_back)
+    params = {
+        "meetingType": "meeting",
+        "state": "ended",
+        "from": past.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "to": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "max": max_results
+    }
     async with httpx.AsyncClient(timeout=15) as http:
-        r = await http.get(f"https://webexapis.com/v1/meeting/qualities?meetingId={meeting_id}", headers=HEADERS)
+        r = await http.get("https://webexapis.com/v1/meetings", headers=HEADERS, params=params)
     return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}: {r.text}"}
+
+@mcp.tool()
+async def get_meeting_qualities(meeting_id: str) -> dict:
+    """Analytics and diagnostics for an ended meeting. Use the ID from list_ended_meetings."""
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get("https://analytics.webexapis.com/v1/meeting/qualities", headers=HEADERS, params={"meetingId": meeting_id})
+    return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}: {r.text}"}
+
+@mcp.tool()
+async def list_report_templates(service: str = "") -> dict:
+    """List report templates. Org-level templates (identifier 'org') can be created without a Webex site."""
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get("https://webexapis.com/v1/report/templates", headers=HEADERS)
+    if r.status_code != 200:
+        return {"error": f"HTTP {r.status_code}: {r.text}"}
+    templates = r.json().get("items", [])
+    if service:
+        templates = [t for t in templates if service.lower() in (t.get("service") or "").lower()]
+    return {
+        "count": len(templates),
+        "templates": [
+            {"id": t.get("Id"), "title": t.get("title"), "service": t.get("service"), "identifier": t.get("identifier")}
+            for t in templates
+        ]
+    }
 
 @mcp.tool()
 async def create_report(template_id: str, start_date: str, end_date: str) -> dict:
