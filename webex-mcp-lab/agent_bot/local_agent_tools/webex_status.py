@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 # Public Webex status feed — no auth required. /index.json returns components,
 # status, and incidents in ONE call (simpler for the lab than the /api/v2/*.json
 # endpoints, which split the same data across several requests).
-_STATUS_URL = "https://status.webex.com/index.json"
+_STATUS_URL = "https://status.webex.com/status.json"
 
 
 def check_webex_status() -> str:

@@ -60,7 +60,7 @@ async def list_people(max_results: int = 10) -> dict:
 async def unresolved_incidents() -> dict:
     """Check Webex for any unresolved platform incidents."""
     async with httpx.AsyncClient(timeout=15) as http:
-        r = await http.get("https://status.webex.com/api/v2/incidents/unresolved.json")
+        r = await http.get("https://status.webex.com/unresolved-incidents.json")
     if r.status_code != 200:
         return {"error": f"HTTP {r.status_code}: {r.text}"}
     
