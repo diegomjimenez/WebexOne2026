@@ -54,7 +54,7 @@ async def list_locations(max_results: int = 25) -> dict:
 async def get_location_call_settings(location_id: str) -> dict:
     """Manage specific calling settings for a location."""
     async with httpx.AsyncClient(timeout=15) as http:
-        r = await http.get(f"https://webexapis.com/v1/telephony/config/locations/{location_id}/callSettings", headers=HEADERS)
+        r = await http.get(f"https://webexapis.com/v1/telephony/config/locations/{location_id}", headers=HEADERS)
     return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}: {r.text}"}
 
 @mcp.tool()

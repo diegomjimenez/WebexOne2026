@@ -92,7 +92,7 @@ async def get_location_call_settings(location_id: str) -> dict:
     """Manage specific calling settings for a location."""
     async with httpx.AsyncClient(timeout=15) as http:
         r = await http.get(
-            f"https://webexapis.com/v1/telephony/config/locations/{location_id}/callSettings",
+            f"https://webexapis.com/v1/telephony/config/locations/{location_id}",
             headers=HEADERS
         )
     if r.status_code != 200:
