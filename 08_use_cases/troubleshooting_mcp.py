@@ -78,7 +78,22 @@ async def list_admin_audit_events(days_back: int = 7, max_results: int = 25) -> 
     }
     async with httpx.AsyncClient(timeout=15) as http:
         r = await http.get("https://webexapis.com/v1/adminAudit/events", headers=HEADERS, params=params)
-    return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}: {r.text}"}
+    if r.status_code != 200:
+        return {"error": f"HTTP {r.status_code}: {r.text}"}
+    events = r.json().get("items", [])
+    return {
+        "count": len(events),
+        "events": [
+            {
+                "id": e.get("id"),
+                "created": e.get("created"),
+                "actionText": e.get("data", {}).get("actionText"),
+                "actorEmail": e.get("data", {}).get("actorEmail"),
+                "category": e.get("data", {}).get("eventCategory"),
+            }
+            for e in events
+        ]
+    }
 
 @mcp.tool()
 async def list_ended_meetings(days_back: int = 7, max_results: int = 25) -> dict:
@@ -105,7 +120,7 @@ async def get_meeting_qualities(meeting_id: str) -> dict:
 
 @mcp.tool()
 async def list_report_templates(service: str = "") -> dict:
-    """List report templates. Org-level templates (identifier 'org') can be created without a Webex site."""
+    """List report templates. Org-level templates need only dates. Meetings (identifier 'site') also need siteList."""
     async with httpx.AsyncClient(timeout=15) as http:
         r = await http.get("https://webexapis.com/v1/report/templates", headers=HEADERS)
     if r.status_code != 200:
@@ -122,13 +137,15 @@ async def list_report_templates(service: str = "") -> dict:
     }
 
 @mcp.tool()
-async def create_report(template_id: str, start_date: str, end_date: str) -> dict:
-    """Create a new report using a template ID. Dates must be YYYY-MM-DD."""
+async def create_report(template_id: str, start_date: str, end_date: str, site_list: str = "") -> dict:
+    """Create a report. Dates must be YYYY-MM-DD. For Meetings templates, pass site_list as a comma-separated site URL."""
     payload = {
         "templateId": int(template_id) if template_id.isdigit() else template_id,
         "startDate": start_date,
         "endDate": end_date
     }
+    if site_list:
+        payload["siteList"] = [s.strip() for s in site_list.split(",") if s.strip()]
     async with httpx.AsyncClient(timeout=15) as http:
         r = await http.post("https://webexapis.com/v1/reports", headers=HEADERS, json=payload)
     return r.json() if r.status_code in (200, 201) else {"error": f"HTTP {r.status_code}: {r.text}"}
