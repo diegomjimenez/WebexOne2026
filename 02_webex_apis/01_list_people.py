@@ -6,6 +6,7 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 """
 # Step 01 - list people in the organization. Same shape as the Developer Portal snippet, token from .env.
 
+import json
 import os
 import sys
 import requests
@@ -23,4 +24,4 @@ headers = {
 }
 
 response = requests.get(url, headers=headers, params={"max": 5})
-print(response.json())
+print(json.dumps(response.json(), indent=2))
