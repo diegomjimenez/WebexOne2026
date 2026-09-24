@@ -75,6 +75,44 @@ async def list_admin_audit_events(days_back: int = 7, max_results: int = 10) -> 
     }
 
 @mcp.tool()
+async def list_security_audit_events(days_back: int = 7, max_results: int = 10) -> dict:
+    """List recent security audit events (user sign-ins and sign-outs) in the organization."""
+    now = datetime.now(timezone.utc)
+    past = now - timedelta(days=days_back)
+    
+    params = {
+        "orgId": ORG_ID,
+        "startTime": past.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+        "endTime": now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+        "max": max_results
+    }
+    
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get(
+            "https://webexapis.com/v1/admin/securityAudit/events",
+            headers=HEADERS,
+            params=params
+        )
+    if r.status_code != 200:
+        return {"error": f"HTTP {r.status_code}: {r.text}"}
+    
+    events = r.json().get("items", [])
+    return {
+        "count": len(events),
+        "events": [
+            {
+                "id": e.get("id"),
+                "created": e.get("created"),
+                "actorEmail": e.get("data", {}).get("actorEmail"),
+                "clientIP": e.get("data", {}).get("clientIP"),
+                "eventCategory": e.get("data", {}).get("eventCategory"),
+                "eventDescription": e.get("data", {}).get("eventDescription"),
+            }
+            for e in events
+        ]
+    }
+
+@mcp.tool()
 async def list_reports() -> dict:
     """List recent usage and activity reports generated in the organization."""
     async with httpx.AsyncClient(timeout=15) as http:
