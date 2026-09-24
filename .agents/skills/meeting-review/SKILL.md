@@ -1,27 +1,55 @@
 ---
 name: meeting-review
 description: >-
-  Use when a user asks to review or prepare for upcoming meetings.
-  Check each meeting for agenda, invitees, and scheduling conflicts.
-  Flag anything missing and produce a preparation checklist.
-  Do not use for simple meeting listing or lookup requests.
+  Use when the user asks to prepare for, get ready for, review readiness of, or
+  check what is missing from their meetings. Triggers on phrasings like "help me
+  prepare", "am I ready for", "what do I need before", "review my meetings",
+  "check my schedule for gaps". Checks each upcoming meeting for agenda,
+  invitees, and conflicts, then produces a preparation checklist. Not for a
+  plain list of meetings with no readiness question.
+argument-hint: [person or time range]
 ---
 
 # Meeting Review
 
-## What this skill does
+## Tools
 
-Check upcoming meetings for readiness. Flag missing agendas, missing
-invitees, and scheduling conflicts. Produce a short preparation checklist.
+Use the Webex Meeting MCP server only.
 
-## Rules
+| Need | Tool |
+|---|---|
+| Find upcoming meetings | `webex-list-meetings` |
+| Set agenda, title, time, or invitees | `webex-update-meeting` |
 
-1. List meetings in chronological order with start time and title.
-2. For each meeting, check:
-   - Does it have an agenda or description? Flag `NO AGENDA` if missing.
-   - Are there invitees beyond the host? Flag `NO INVITEES` if empty.
-   - Does it overlap or conflict with another meeting? Flag `CONFLICT`.
-3. Produce a `PREPARATION CHECKLIST` at the bottom with concrete actions.
-4. Be factual. Use only data from tools. Never invent attendees or agendas.
-5. Keep it short. One line per meeting plus flags.
-6. If no upcoming meetings exist, say so clearly.
+If no Webex Meeting tool is available, output
+`WEBEX MEETING TOOLS NOT AVAILABLE` and stop. Do not answer from memory.
+
+## Procedure
+
+1. Call `webex-list-meetings` with `state="scheduled"` and
+   `includeParticipants=true`. Pass `from`/`to` when the user gave a time range.
+2. Check all three dimensions for every meeting:
+   - **Agenda** — is the `agenda` field non-empty? A meeting without one wastes
+     its own first ten minutes, so this is the highest-value flag.
+   - **Invitees** — is anyone listed besides the host?
+   - **Conflicts** — compare each meeting's start and end against every other
+     meeting in the result set. Flag both sides of any overlap.
+3. Report every check, including the ones that pass. A silent check reads as a
+   skipped check.
+4. Produce the checklist using the template below.
+
+## Output template
+
+```
+MEETING READINESS -- <person or range>
+======================================
+
+<title> | <day HH:MM> | <duration>
+  Agenda:    <present / NO AGENDA>
+  Invitees:  <N invited / NO INVITEES>
+  Conflict:  <none / CONFLICT with "<other title>">
+
+PREPARATION CHECKLIST
+1. <most urgent concrete action>
+2. <next action>
+======================================
