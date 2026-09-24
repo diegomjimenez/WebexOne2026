@@ -52,18 +52,49 @@ async def list_reports() -> dict:
     return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}: {r.text}"}
 
 @mcp.tool()
-async def get_detailed_call_history(days_back: int = 1, max_results: int = 50) -> dict:
-    """Get detailed call history (CDRs) for troubleshooting call quality or routing issues."""
-    now = datetime.now(timezone.utc)
-    past = now - timedelta(days=days_back)
+async def get_detailed_call_history(hours_back: int = 12, max_results: int = 500) -> dict:
+    """Get Webex Calling CDRs. Requires the Calling CDR role and scope."""
+    hours_back = max(1, min(hours_back, 12))
+    max_results = max(500, min(max_results, 5000))
+    end = datetime.now(timezone.utc) - timedelta(minutes=6)
+    start = end - timedelta(hours=hours_back)
     params = {
-        "startTime": past.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-        "endTime": now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+        "startTime": start.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+        "endTime": end.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
         "max": max_results
     }
     async with httpx.AsyncClient(timeout=15) as http:
-        r = await http.get("https://webexapis.com/v1/reports/details/callHistory", headers=HEADERS, params=params)
-    return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}: {r.text}"}
+        r = await http.get(
+            "https://analytics-calling.webexapis.com/v1/cdr_feed",
+            headers=HEADERS,
+            params=params
+        )
+    if r.status_code != 200:
+        return {"error": f"HTTP {r.status_code}: {r.text}"}
+    records = r.json().get("items", [])
+    return {
+        "count": len(records),
+        "startTime": params["startTime"],
+        "endTime": params["endTime"],
+        "calls": [
+            {
+                "reportId": record.get("Report ID"),
+                "startTime": record.get("Start time"),
+                "releaseTime": record.get("Release time"),
+                "duration": record.get("Duration"),
+                "direction": record.get("Direction"),
+                "callType": record.get("Call type"),
+                "callingNumber": record.get("Calling number"),
+                "calledNumber": record.get("Called number"),
+                "answered": record.get("Answered"),
+                "outcome": record.get("Call outcome"),
+                "outcomeReason": record.get("Call outcome reason"),
+                "user": record.get("User"),
+                "location": record.get("Location"),
+            }
+            for record in records
+        ]
+    }
 
 @mcp.tool()
 async def list_admin_audit_events(days_back: int = 7, max_results: int = 25) -> dict:
