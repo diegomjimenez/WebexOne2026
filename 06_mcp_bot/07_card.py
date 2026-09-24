@@ -4,8 +4,7 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 - Diego Manuel Jimenez Moreno
 - Mo Eyad Musallam
 
-Same hub bot as 05, plus send_meetings_card: the LLM lists meetings via MCP, then
-asks us to post an Adaptive Card with Join buttons when there are meetings.
+Connecting a local tool with Adaptive card to the bot.
 """
 
 import asyncio

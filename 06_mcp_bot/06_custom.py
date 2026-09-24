@@ -4,7 +4,7 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 - Diego Manuel Jimenez Moreno
 - Mo Eyad Musallam
 
-Same bot as 05_bot.py, plus the custom MCP server from Lab 3 over stdio.
+Connecting a custom MCP server to the bot.
 """
 
 import asyncio
