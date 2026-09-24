@@ -1,9 +1,0 @@
-{
-  "servers": {
-    "webex-mcp-lab": {
-      "command": "${workspaceFolder}/../webexone/bin/python",
-      "args": ["01_hello_mcp.py"],
-      "cwd": "${workspaceFolder}"
-    }
-  }
-}
