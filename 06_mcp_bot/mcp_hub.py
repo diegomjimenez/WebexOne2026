@@ -1,4 +1,11 @@
-"""Several MCP servers, one list of tools. The LLM picks a tool name; we route the call."""
+"""
+Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
+
+- Diego Manuel Jimenez Moreno
+- Mo Eyad Musallam
+
+Several MCP servers, one list of tools. The LLM picks a tool name; we route the call.
+"""
 
 from mcp_client import McpClient
 
