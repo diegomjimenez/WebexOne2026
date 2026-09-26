@@ -4,10 +4,8 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 - Diego Manuel Jimenez Moreno
 - Mo Eyad Musallam
 
-Connect to the Webex Meetings MCP server and list its tools.
+Compare the discovery summary with one full skill body.
 """
-
-"""Compare the discovery summary with one full skill body."""
 
 from pathlib import Path
 
