@@ -1,4 +1,11 @@
-"""Webex WebSocket client: register a device and deliver incoming message events."""
+"""
+Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
+
+- Diego Manuel Jimenez Moreno
+- Mo Eyad Musallam
+
+Webex WebSocket client: register a device and deliver incoming message events.
+"""
 
 import asyncio
 import base64
