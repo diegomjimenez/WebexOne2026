@@ -1,4 +1,11 @@
-"""OpenAI Chat Completions + MCP tool loop. The host (script or bot) supplies the tools."""
+"""
+Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
+
+- Diego Manuel Jimenez Moreno
+- Mo Eyad Musallam
+
+OpenAI Chat Completions + MCP tool loop. The host (script or bot) supplies the tools.
+"""
 
 import asyncio
 import json
