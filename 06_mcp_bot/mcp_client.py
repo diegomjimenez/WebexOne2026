@@ -1,4 +1,10 @@
-"""MCP client: one session per server, list tools, and call them.
+"""
+Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
+
+- Diego Manuel Jimenez Moreno
+- Mo Eyad Musallam
+
+MCP client: one session per server, list tools, and call them.
 
 Remote Webex MCP: URL + Bearer token (Streamable HTTP).
 Local custom MCP: command + args (stdio), same as VS Code in Lab 3.
