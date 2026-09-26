@@ -7,6 +7,7 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 Ask one question twice: once with meeting-review off, once with it on.
 """
 
+import argparse
 import asyncio
 import json
 import logging
@@ -61,7 +62,12 @@ CANNED_MEETINGS = {
     ]
 }
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+parser = argparse.ArgumentParser(description="Compare LLM responses with and without a skill.")
+parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging")
+args = parser.parse_args()
+
+log_level = logging.INFO if args.verbose else logging.WARNING
+logging.basicConfig(level=log_level, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("skills-compare")
 
 load_dotenv(LAB_ROOT / ".env")
