@@ -1,3 +1,10 @@
+"""
+Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
+
+- Diego Manuel Jimenez Moreno
+- Mo Eyad Musallam
+"""
+
 import yaml
 from pathlib import Path
 
