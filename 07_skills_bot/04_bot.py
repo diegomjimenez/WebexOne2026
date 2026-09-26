@@ -144,7 +144,7 @@ async def reply_with_assistant(message, sender, question):
         log.exception("Assistant turn failed")
         bot.send_message(message["roomId"], "Sorry, I could not answer that right now.")
         return
-    bot.send_message(message["roomId"], reply)
+    bot.send_message(message["roomId"], reply, is_markdown=True)
     log.info(f"Sent to {sender}: {reply}")
 
 
@@ -155,3 +155,4 @@ if __name__ == "__main__":
         bot.run()
     except KeyboardInterrupt:
         log.info("Stopped.")
+
