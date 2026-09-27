@@ -10,7 +10,7 @@ description: >-
   platform-status check with MCP tools from the address-book server (06)
   and the desktop-profile server (07).
 compatibility: >-
-  Requires MCP servers 06_manage_address_books and
+  Requires MCP servers manage_address_books and
   07_verify_desktop_profiles, plus local tool check_webex_status.
 metadata:
   author: webexone-2026

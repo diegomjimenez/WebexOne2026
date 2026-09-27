@@ -1,6 +1,0 @@
-webex-bot
-webexpythonsdk
-openai
-mcp
-python-dotenv
-requests

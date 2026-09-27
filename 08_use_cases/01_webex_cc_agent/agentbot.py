@@ -69,13 +69,13 @@ _configs = [
     {
         "name": "address-books",
         "command": sys.executable,
-        "args": ["06_manage_address_books.py"],
+        "args": ["manage_address_books.py"],
         "cwd": MCP_SERVERS_DIR,
     },
     {
         "name": "desktop-profiles",
         "command": sys.executable,
-        "args": ["07_verify_desktop_profiles.py"],
+        "args": ["verify_desktop_profiles.py"],
         "cwd": MCP_SERVERS_DIR,
     },
 ]

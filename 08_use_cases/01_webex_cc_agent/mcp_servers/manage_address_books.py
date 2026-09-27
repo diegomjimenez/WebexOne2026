@@ -4,8 +4,8 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 - Diego Manuel Jimenez Moreno
 - Mo Eyad Musallam
 """
-# Step 06 - capstone: prompt + resource + tools on the real Contact Center API.
-# All three MCP primitives in one server. Logs go to 06_manage_address_books.log only.
+# capstone: prompt + resource + tools on the real Contact Center API.
+# All three MCP primitives in one server. Logs go to manage_address_books.log only.
 
 import logging
 import os
@@ -29,7 +29,7 @@ from mcp.server.mcpserver import (
 from pydantic import BaseModel
 
 # Configure file-only logging (not stderr) so the terminal stays clean.
-_LOG_FILE = Path(__file__).parent / "06_manage_address_books.log"
+_LOG_FILE = Path(__file__).parent / "manage_address_books.log"
 logging.basicConfig(
     filename=str(_LOG_FILE),
     level=logging.DEBUG,

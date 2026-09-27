@@ -341,7 +341,7 @@ if __name__ == "__main__":
     if not server_args:
         sys.exit(
             "ERROR: MCP_SERVER_ARGS is not set. Point it at an MCP server "
-            "in .env (see .env.example), e.g. MCP_SERVER_ARGS=06_manage_address_books.py"
+            "in .env (see .env.example), e.g. MCP_SERVER_ARGS=manage_address_books.py"
         )
     connect(
         command=os.getenv("MCP_SERVER_COMMAND", "python"),

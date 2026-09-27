@@ -8,7 +8,7 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 # Focused on verifying agent-to-desktop-profile assignments.
 # 1 resource (field glossary), 3 read tools, 1 write tool (update profile with elicitation).
 # No prompts — troubleshooting logic lives in the client-side agent skill.
-# Logs go to 07_verify_desktop_profiles.log only.
+# Logs go to verify_desktop_profiles.log only.
 
 import logging
 import os
@@ -31,7 +31,7 @@ from mcp.server.mcpserver import (
 from pydantic import BaseModel
 
 # Configure file-only logging (not stderr) so the terminal stays clean.
-_LOG_FILE = Path(__file__).parent / "07_verify_desktop_profiles.log"
+_LOG_FILE = Path(__file__).parent / "verify_desktop_profiles.log"
 logging.basicConfig(
     filename=str(_LOG_FILE),
     level=logging.DEBUG,
