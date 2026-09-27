@@ -4,10 +4,11 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 - Diego Manuel Jimenez Moreno
 - Mo Eyad Musallam
 
-Lab 8 — Full bot: imports the upgraded agent_bot modules for persistent MCP
-sessions, Adaptive Card elicitation, and card-tap handling. Write operations
-with server-side elicitation (e.g., update_desktop_profile) now post an
-Adaptive Card and wait for the user to tap Confirm or Decline.
+Webex Contact Center agent — a self-contained use case.
+
+Everything this agent needs lives in this folder: the engine (utils/), the
+local tool (local_agent_tools/), the troubleshooting skill (skills/), and the
+two MCP servers (mcp_servers/). Nothing is imported from other labs.
 """
 
 import logging
@@ -18,25 +19,19 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
-LAB_ROOT = Path(__file__).resolve().parent.parent
-AGENT_BOT_DIR = str(LAB_ROOT / "webex-mcp-lab" / "agent_bot")
-
-# Import the upgraded modules from agent_bot/utils — persistent sessions,
-# Adaptive Card elicitation, card-tap WebSocket, and skills.
-sys.path.insert(0, AGENT_BOT_DIR)
-
-from utils import mcp_client, elicit, skills          # persistent MCP + elicit bridge
-from utils.websocket import WebSocketClientCards       # messages + card taps
-from local_agent_tools import webex_status             # local Webex status tool
+# Own-folder imports — this folder is the import root.
+from utils import mcp_client, skills, elicit
+from utils.websocket import WebSocketClientCards
+from local_agent_tools import webex_status
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s")
-log = logging.getLogger("full-bot")
+log = logging.getLogger("webex-cc-agent")
 
 load_dotenv()
 
 # ── Configuration ──────────────────────────────────────────────────────────
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = Path(__file__).resolve().parent
 bot_token = os.getenv("BOT_TOKEN")
 MODEL = os.getenv("MODEL", "").strip()
 if not MODEL:
@@ -46,18 +41,17 @@ if not MODEL:
         "  MODEL=gpt-5-nano\n"
     )
 MAX_HISTORY = int(os.getenv("MAX_HISTORY", "20"))
-SKILLS_DIR = os.path.join(SCRIPT_DIR, "skills")
-MCP_SERVERS_DIR = str(LAB_ROOT / "webex-mcp-lab" / "mcp_servers")
+SKILLS_DIR = str(SCRIPT_DIR / "skills")
+MCP_SERVERS_DIR = str(SCRIPT_DIR / "mcp_servers")
 
 if not bot_token:
     sys.exit("ERROR: BOT_TOKEN is not set in .env")
 
 
 def load_persona():
-    path = os.path.join(SCRIPT_DIR, "system_prompt.txt")
+    path = SCRIPT_DIR / "system_prompt.txt"
     try:
-        with open(path, encoding="utf-8") as f:
-            text = f.read().strip()
+        text = path.read_text(encoding="utf-8").strip()
         if text:
             return text
     except OSError:
@@ -70,7 +64,7 @@ def load_persona():
     )
 
 
-# ── Connect to MCP servers 06 and 07 (persistent sessions) ────────────────
+# ── Connect to this agent's own MCP servers (06 address books, 07 profiles) ─
 _configs = [
     {
         "name": "address-books",

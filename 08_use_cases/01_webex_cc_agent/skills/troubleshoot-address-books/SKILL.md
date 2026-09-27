@@ -13,12 +13,10 @@ compatibility: >-
   Requires MCP servers 06_manage_address_books and
   07_verify_desktop_profiles, plus local tool check_webex_status.
 metadata:
-  author: webex-mcp-lab
+  author: webexone-2026
   version: "3.0"
   lab-chapter: "8"
 ---
-
-<!-- Copied from webex-mcp-lab/agent_bot/skills/ — keep in sync -->
 
 # Troubleshoot Address Books
 
