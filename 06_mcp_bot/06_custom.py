@@ -35,7 +35,7 @@ MEETING_MCP_URL = "https://mcp.webexapis.com/mcp/webex-meeting"
 ERROR_REPLY = "Sorry, I could not answer that right now. Please try again in a moment."
 
 LAB_ROOT = Path(__file__).resolve().parent.parent
-CUSTOM_SERVER = LAB_ROOT / "03_custom_mcp" / "03_read_books.py"
+CUSTOM_SERVER = LAB_ROOT / "04_custom_mcp" / "03_read_books.py"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("mcp-custom-bot")
