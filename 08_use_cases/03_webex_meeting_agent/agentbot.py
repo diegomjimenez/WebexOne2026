@@ -173,7 +173,7 @@ client = WebSocketClientCards(
     on_message=on_message,
     on_card=on_card,
 )
-log.info("Listening as %s via Mercury (messages + cards)... (Ctrl+C to stop)",
+log.info("Listening as %s via Webex Websockets (messages + cards)... (Ctrl+C to stop)",
          client.me.get("emails", ["?"])[0])
 try:
     client.run()
