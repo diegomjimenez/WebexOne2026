@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 API_URL = "https://webexapis.com/v1"
 # Host map for the org: used to find the WDM URL that issues Webex WebSocket devices.
 CATALOG_URL = "https://u2c.wbx2.com/u2c/api/v1/catalog?format=hostmap"
-# Payload Webex expects when creating a desktop "device" that can open Mercury.
+# Payload Webex expects when creating a desktop "device" that can open a websocket connection..
 DEVICE_DATA = {
     "deviceName": "pywebsocket-client",
     "deviceType": "DESKTOP",
@@ -35,7 +35,7 @@ DEVICE_DATA = {
 }
 
 class WebSocketClient:
-    """Opens a Webex Mercury WebSocket and calls on_message(message) for each new post."""
+    """Opens a Webex WebSocket and calls on_message(message) for each new post."""
 
     def __init__(self, access_token, on_message):
         self.access_token = access_token
@@ -97,7 +97,7 @@ class WebSocketClient:
     async def listen(self):
         # 1) Ask the catalog where device registration lives for this org.
         wdm_url = self.session.get(CATALOG_URL).json()["serviceLinks"]["wdm"]
-        # 2) Register a device; the response includes the Mercury WebSocket URL.
+        # 2) Register a device; the response includes the Webex WebSocket URL.
         device = self.session.post(f"{wdm_url}/devices", json=DEVICE_DATA).json()
         # 3) Verify TLS with certifi (Python's default store often misses these CAs).
         ssl_context = ssl.create_default_context(cafile=certifi.where())
