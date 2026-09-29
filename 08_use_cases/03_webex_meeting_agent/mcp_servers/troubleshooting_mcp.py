@@ -89,13 +89,50 @@ async def list_reports() -> dict:
         r = await http.get("https://webexapis.com/v1/reports", headers=HEADERS)
     return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}: {r.text}"}
 
+def _parse_cdr_time(value: str) -> datetime:
+    """Parse a CDR window bound. Accepts 'YYYY-MM-DD' (start of that UTC day)
+    or a full ISO 8601 timestamp such as '2026-09-24T05:00:00Z'."""
+    text = value.strip()
+    if len(text) == 10:  # date only -> start of day UTC
+        text += "T00:00:00+00:00"
+    else:
+        text = text.replace("Z", "+00:00")
+    dt = datetime.fromisoformat(text)
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
 @mcp.tool()
-async def get_detailed_call_history(hours_back: int = 12, max_results: int = 500) -> dict:
-    """Get Webex Calling CDRs. Requires the Calling CDR role and scope."""
-    hours_back = max(1, min(hours_back, 12))
+async def get_detailed_call_history(hours_back: int = 12, max_results: int = 500,
+                                    start_time: str = "", end_time: str = "") -> dict:
+    """Get Webex Calling CDRs. Requires the Calling CDR role and scope.
+
+    By default (no start_time/end_time) returns the last `hours_back` hours
+    (1-12, default 12) ending now. To target an older window, pass `start_time`
+    and/or `end_time` as UTC — either a date ('2026-09-24') or an ISO 8601
+    timestamp ('2026-09-24T05:00:00Z'). Webex limits the window to at most 12
+    hours and requires the end to be at least ~5 minutes in the past; both are
+    enforced here.
+    """
     max_results = max(500, min(max_results, 5000))
-    end = datetime.now(timezone.utc) - timedelta(minutes=6)
-    start = end - timedelta(hours=hours_back)
+    latest = datetime.now(timezone.utc) - timedelta(minutes=6)
+    if start_time or end_time:
+        try:
+            end = _parse_cdr_time(end_time) if end_time \
+                else _parse_cdr_time(start_time) + timedelta(hours=12)
+            start = _parse_cdr_time(start_time) if start_time \
+                else end - timedelta(hours=12)
+        except ValueError:
+            return {"error": "start_time/end_time must be 'YYYY-MM-DD' or ISO 8601 (e.g. 2026-09-24T05:00:00Z)."}
+        if end > latest:
+            end = latest
+        if end - start > timedelta(hours=12):
+            start = end - timedelta(hours=12)
+        if start >= end:
+            return {"error": "start_time must be before end_time (and end_time at least ~5 minutes in the past)."}
+    else:
+        hours_back = max(1, min(hours_back, 12))
+        end = latest
+        start = end - timedelta(hours=hours_back)
     params = {
         "startTime": start.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
         "endTime": end.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",

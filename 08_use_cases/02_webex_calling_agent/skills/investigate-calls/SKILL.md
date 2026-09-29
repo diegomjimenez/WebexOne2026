@@ -31,8 +31,11 @@ are simply "show me what happened".
 
 1. Clarify scope only if it is missing: which user or number, and roughly
    when (CDRs cover the last few hours).
-2. Pull the records with `get_detailed_call_history`. Widen `hours_back` if
-   the request is about an older window.
+2. Pull the records with `get_detailed_call_history`. For a recent window,
+   widen `hours_back` (max 12). For a specific past window, pass `start_time`
+   and/or `end_time` (UTC — a date like `2026-09-24` or an ISO 8601 timestamp
+   like `2026-09-24T05:00:00Z`); the window is capped at 12 hours and must end
+   at least ~5 minutes in the past.
 3. Report the calls that match the user or number in question — who called
    whom, when, how long, and the outcome. This alone answers most requests.
 4. If every call succeeded, say so plainly and stop; there is nothing to fix.
@@ -61,8 +64,11 @@ confirm who owns the call.
 
 ## Edge cases
 
-- **No CDRs in the window** — the feed only covers the last few hours. Say so
-  and offer to widen `hours_back`, rather than concluding "no calls".
+- **No CDRs in the window** — the default window is only the last few hours.
+  Say so and offer to widen `hours_back` or target an explicit past window with
+  `start_time`/`end_time`, rather than concluding "no calls". If the calls are
+  older than Webex's CDR retention, even an explicit window returns nothing —
+  say that plainly instead of implying there were no calls.
 - **CDR user not in `list_people`** — likely external, a workspace, or another
   org; note it instead of forcing a match.
 - **403 from the CDR feed** — the token lacks the Calling CDR scope/role;
