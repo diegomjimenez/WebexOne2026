@@ -26,6 +26,8 @@ are simply "show me what happened".
   `list_licenses` (`id` -> `name`) and report the names, not the IDs.
 - `list_numbers`, `list_devices` (calling server) — how the user is
   provisioned to call.
+- `get_call_forwarding` (calling server) — a user's call forwarding. If their
+  inbound calls are not arriving, forwarding may be sending them elsewhere.
 
 ## Steps
 
@@ -48,11 +50,26 @@ are simply "show me what happened".
    - `list_people` / `list_licenses` — is the user active and licensed to call?
    - `list_numbers` / `list_devices` — do they own the number and have a
      registered device?
+   - `get_call_forwarding` — if inbound calls are not arriving, is forwarding
+     sending them elsewhere?
    Correlate: no license or no number explains a user who cannot call; a
    routing `outcomeReason` on otherwise healthy provisioning points at dial
    plans or the destination, not the user.
 6. For any non-successful call, quote its `outcomeReason` — it is the API's
    own explanation and the single most useful field.
+
+## Reporting a diagnosis
+
+Keep it short and evidence-based. Anchor every conclusion to the specific
+`outcomeReason` and the pattern you actually saw — for example, repeated
+`TemporarilyUnavailable` refusals within a few seconds usually means retries to
+an endpoint that was unregistered or unavailable; `CallRejected` on an
+international destination points at the outbound dial plan or the location's
+calling permission for that prefix, not the user. Name only the one or two most
+likely causes and offer at most two or three concrete next actions. Do not
+re-list the calls you already showed, do not hedge with a long list of "could
+be" possibilities, and skip incidental tool noise (for example, an unrelated
+404) that is not the cause.
 
 ## Reading a CDR
 
@@ -81,8 +98,9 @@ confirm who owns the call.
 ## Guardrails
 
 - Reporting and investigation are read-only — do them freely.
-- For a management change (create/delete a workspace, location, or device),
-  call the tool directly; the server shows a confirmation card and waits for
-  approval. Never write to "fix" something you were only asked to look at.
+- For a management change (create/delete a workspace, location, or device, or
+  changing a user's call forwarding), call the tool directly; the server shows
+  a confirmation card and waits for approval. Never write to "fix" something
+  you were only asked to look at.
 - Only use IDs and numbers that came from a tool, and base every conclusion on
   a field a tool returned — never guess.

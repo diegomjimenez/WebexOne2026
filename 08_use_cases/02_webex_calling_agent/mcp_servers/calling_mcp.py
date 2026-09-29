@@ -36,6 +36,13 @@ class Confirm(BaseModel):
 async def confirm_delete_device(device_id: str) -> Elicit[Confirm]:
     return Elicit(f"Delete device '{device_id}'? This cannot be undone.", Confirm)
 
+async def confirm_call_forwarding(person_id: str, forward_all_to: str) -> Elicit[Confirm]:
+    if forward_all_to:
+        msg = f"Forward all calls for user '{person_id}' to {forward_all_to}?"
+    else:
+        msg = f"Turn off 'forward all calls' for user '{person_id}'?"
+    return Elicit(msg, Confirm)
+
 @mcp.tool()
 async def list_numbers(max_results: int = 25) -> dict:
     """List phone numbers configured in the organization."""
@@ -104,6 +111,53 @@ async def delete_device(device_id: str, confirm: Annotated[ElicitationResult[Con
             return {"deleted": False, "reason": "You chose not to delete."}
         case DeclinedElicitation() | CancelledElicitation():
             return {"deleted": False, "reason": "Confirmation was declined or dismissed."}
+
+@mcp.tool()
+async def get_call_forwarding(person_id: str) -> dict:
+    """Show a user's call forwarding settings. This is the same setting the
+    user sees in their Webex app under Settings > Calling > Call forwarding."""
+    params = {"orgId": ORG_ID} if ORG_ID else {}
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get(
+            f"https://webexapis.com/v1/people/{person_id}/features/callForwarding",
+            headers=HEADERS, params=params
+        )
+    return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}: {r.text}"}
+
+@mcp.tool()
+async def update_call_forwarding(
+    person_id: str,
+    forward_all_to: str = "",
+    confirm: Annotated[ElicitationResult[Confirm], Resolve(confirm_call_forwarding)] = None,
+) -> dict:
+    """Set or clear 'forward all calls' for a user. Pass forward_all_to as the
+    destination number to enable it, or leave it empty to turn forwarding off.
+    The server asks you to confirm first. This is the same setting the user
+    sees in their Webex app under Settings > Calling > Call forwarding."""
+    match confirm:
+        case AcceptedElicitation(data=Confirm(ok=True)):
+            params = {"orgId": ORG_ID} if ORG_ID else {}
+            url = f"https://webexapis.com/v1/people/{person_id}/features/callForwarding"
+            async with httpx.AsyncClient(timeout=15) as http:
+                current = await http.get(url, headers=HEADERS, params=params)
+                if current.status_code != 200:
+                    return {"error": f"HTTP {current.status_code}: {current.text}"}
+                cf = current.json().get("callForwarding", {})
+                cf.setdefault("always", {})
+                cf["always"]["enabled"] = bool(forward_all_to)
+                cf["always"]["destination"] = forward_all_to
+                # systemMaxNumberOfRings is read-only; drop it before writing back.
+                cf.get("noAnswer", {}).pop("systemMaxNumberOfRings", None)
+                r = await http.put(url, headers=HEADERS, params=params,
+                                   json={"callForwarding": cf})
+            if r.status_code not in (200, 204):
+                return {"error": f"HTTP {r.status_code}: {r.text}"}
+            return {"updated": True, "person_id": person_id,
+                    "forward_all_to": forward_all_to}
+        case AcceptedElicitation():
+            return {"updated": False, "reason": "You chose not to change call forwarding."}
+        case DeclinedElicitation() | CancelledElicitation():
+            return {"updated": False, "reason": "Confirmation was declined or dismissed."}
 
 if __name__ == "__main__":
     log.info("webex-calling-complex running on stdio - waiting for a client (Ctrl+C to stop).")
