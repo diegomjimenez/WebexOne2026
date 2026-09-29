@@ -4,7 +4,7 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 - Diego Manuel Jimenez Moreno
 - Mo Eyad Musallam
 """
-# Webex Mercury WebSocket client with Adaptive Card support.
+# Webex WebSocket client with Adaptive Card support.
 # Delivers messages via on_message AND card button taps via on_card,
 # all over one outbound WebSocket — no webhook, no ngrok, no inbound connections.
 
@@ -35,7 +35,7 @@ DEVICE_DATA = {
 
 
 class WebSocketClientCards:
-    """Opens a Webex Mercury WebSocket and delivers messages + card taps."""
+    """Opens a Webex WebSocket and delivers messages + card taps."""
 
     def __init__(self, access_token, on_message, on_card=None):
         self.access_token = access_token
@@ -63,7 +63,7 @@ class WebSocketClientCards:
 
     def get_card_inputs(self, activity):
         """Fetch decrypted card inputs via the Conversation Service.
-        Mercury delivers inputs KMS-encrypted; we resolve the geo-id the
+        Webex Websockets delivers inputs KMS-encrypted; we resolve the geo-id the
         same way webex_bot does: rewrite target.url, then optionally hit
         the public API for decryption."""
         activity_id = activity.get("id", "")
