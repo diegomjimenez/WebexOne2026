@@ -106,12 +106,13 @@ async def get_detailed_call_history(hours_back: int = 12, max_results: int = 500
                                     start_time: str = "", end_time: str = "") -> dict:
     """Get Webex Calling CDRs. Requires the Calling CDR role and scope.
 
-    By default (no start_time/end_time) returns the last `hours_back` hours
-    (1-12, default 12) ending now. To target an older window, pass `start_time`
-    and/or `end_time` as UTC — either a date ('2026-09-24') or an ISO 8601
-    timestamp ('2026-09-24T05:00:00Z'). Webex limits the window to at most 12
-    hours and requires the end to be at least ~5 minutes in the past; both are
-    enforced here.
+    With no start_time/end_time, returns the last `hours_back` hours (1-12,
+    default 12) ending now. To query a specific past window, pass start_time
+    and/or end_time as absolute UTC times — a date ('2026-09-24') or an ISO
+    8601 timestamp ('2026-09-24T05:00:00Z'). The window is NOT anchored to now;
+    any past window works. Webex only requires the span to be <= 12 hours and
+    the end to be at least ~5 minutes in the past (both enforced here). Pass the
+    window the user asked for and report what the feed returns.
     """
     max_results = max(500, min(max_results, 5000))
     latest = datetime.now(timezone.utc) - timedelta(minutes=6)

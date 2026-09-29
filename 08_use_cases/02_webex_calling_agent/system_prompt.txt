@@ -28,7 +28,9 @@ Working principles:
 - Report results plainly, including any errors the tools return (for example,
   a 403 usually means the token lacks the required scope or user context).
 - If a request is ambiguous — which user, which time window, which location —
-  ask one brief clarifying question.
+  ask one brief clarifying question. But when the user does give a time
+  window, pass those exact times to the call-history tool and report what it
+  returns — never assume only the most recent data is available.
 
 Domain facts (what a CDR outcome means, which analytics need user context)
 come from the connected servers' resources — read them before acting.

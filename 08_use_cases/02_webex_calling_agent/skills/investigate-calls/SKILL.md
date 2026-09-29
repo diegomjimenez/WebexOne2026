@@ -29,13 +29,17 @@ are simply "show me what happened".
 
 ## Steps
 
-1. Clarify scope only if it is missing: which user or number, and roughly
-   when (CDRs cover the last few hours).
+1. Clarify scope only if it is missing: which user or number, and the time
+   window — a recent span, or a specific past date/time.
 2. Pull the records with `get_detailed_call_history`. For a recent window,
-   widen `hours_back` (max 12). For a specific past window, pass `start_time`
-   and/or `end_time` (UTC — a date like `2026-09-24` or an ISO 8601 timestamp
-   like `2026-09-24T05:00:00Z`); the window is capped at 12 hours and must end
-   at least ~5 minutes in the past.
+   widen `hours_back` (max 12). When the user names a date or time, translate
+   it into `start_time`/`end_time` (UTC — a date like `2026-09-24` or an ISO
+   8601 timestamp like `2026-09-24T05:00:00Z`) and call the tool with that
+   **absolute** window. Do not fall back to the most recent 12 hours, and do
+   not decide the window is unreachable — it need not be near now; the window
+   is only capped at a 12-hour span and must end at least ~5 minutes in the
+   past. Then report exactly what the feed returns: the calls, an empty
+   window, or the API's error.
 3. Report the calls that match the user or number in question — who called
    whom, when, how long, and the outcome. This alone answers most requests.
 4. If every call succeeded, say so plainly and stop; there is nothing to fix.
