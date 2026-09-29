@@ -31,8 +31,14 @@ are simply "show me what happened".
 
 ## Steps
 
-1. Clarify scope only if it is missing: which user or number, and the time
-   window — a recent span, or a specific past date/time.
+1. Identify the subject. A named subject is a person or a phone number — not a
+   location or device. Resolve a name like "Pod 0" with `list_people` (match on
+   display name or email) and a number with `list_numbers`; CDRs also carry a
+   `user` display name you can match directly. Do not ask whether
+   the subject is a user, location, or device. Only ask a clarifying question
+   when the request names no subject at all — and even then, offer to summarize
+   all calls in the window. The window itself is either a recent span or a
+   specific past date/time.
 2. Pull the records with `get_detailed_call_history`. For a recent window,
    widen `hours_back` (max 12). When the user names a date or time, translate
    it into `start_time`/`end_time` (UTC — a date like `2026-09-24` or an ISO
@@ -43,7 +49,9 @@ are simply "show me what happened".
    past. Then report exactly what the feed returns: the calls, an empty
    window, or the API's error.
 3. Report the calls that match the user or number in question — who called
-   whom, when, how long, and the outcome. This alone answers most requests.
+   whom, when, how long, and the outcome. This alone answers most requests. If
+   you could not resolve the named subject, report all calls in the window and
+   say you could not narrow to that subject — do not block.
 4. If every call succeeded, say so plainly and stop; there is nothing to fix.
 5. If one or more calls did not succeed, flag them and find out why:
    - `unresolved_incidents` — rule out a platform outage first.
