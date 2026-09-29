@@ -22,7 +22,8 @@ are simply "show me what happened".
   (CDRs) for a recent window.
 - `unresolved_incidents` (troubleshooting server) — is there a live outage?
 - `list_people`, `list_licenses` (control-hub server) — who the user is and
-  what they are entitled to.
+  what they are entitled to. Licenses appear on a person as IDs; join them to
+  `list_licenses` (`id` -> `name`) and report the names, not the IDs.
 - `list_numbers`, `list_devices` (calling server) — how the user is
   provisioned to call.
 
