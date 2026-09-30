@@ -28,10 +28,10 @@ are simply "show me what happened".
   provisioned to call.
 - `get_call_forwarding` (calling server) — a user's call forwarding. If their
   inbound calls are not arriving, forwarding may be sending them elsewhere.
-- `get_outgoing_permission` (calling server) — which call types (TOLL_FREE,
-  NATIONAL, INTERNATIONAL, …) a user may dial. If a user cannot reach a
-  specific number and their provisioning is healthy, that number's call type
-  may be set to BLOCK here.
+- `list_blocked_numbers` (calling server) — the specific numbers a user is
+  blocked from dialing (outgoing-permission digit patterns). If a user cannot
+  reach one particular number while other calls work, that number may have a
+  BLOCK pattern here.
 
 ## Steps
 
@@ -76,15 +76,14 @@ are simply "show me what happened".
      registered device?
    - `get_call_forwarding` — if inbound calls are not arriving, is forwarding
      sending them elsewhere?
-   - `get_outgoing_permission` — if the user cannot dial one specific number or
-     kind of number (for example a 1-800 toll-free number) while other calls
-     work, check whether that call type (TOLL_FREE, NATIONAL, INTERNATIONAL, …)
-     is set to BLOCK.
+   - `list_blocked_numbers` — if the user cannot dial one specific number (for
+     example 1-800-444-4444) while other calls work, check whether that number
+     has a BLOCK digit pattern.
    Correlate: no license or no number explains a user who cannot call; a call
-   that is rejected for one number type while others succeed on healthy
-   provisioning points at outgoing calling permissions; a routing
-   `outcomeReason` on otherwise healthy provisioning points at dial plans or the
-   destination, not the user.
+   that is rejected for one specific number while others succeed on healthy
+   provisioning points at a blocked digit pattern; a routing `outcomeReason` on
+   otherwise healthy provisioning points at dial plans or the destination, not
+   the user.
 6. For any non-successful call, quote its `outcomeReason` — it is the API's
    own explanation and the single most useful field.
 

@@ -88,10 +88,18 @@ async def confirm_call_forwarding(person_id: str, forward_all_to: str) -> Elicit
         msg = f"Turn off 'forward all calls' for {who}?"
     return Elicit(msg, Confirm)
 
-async def confirm_outgoing_permission(person_id: str, call_type: str, action: str) -> Elicit[Confirm]:
+def _digits(number: str) -> str:
+    """Reduce a phone number to just its dialable digits, e.g.
+    '1-800-444-4444' -> '18004444444'."""
+    return "".join(ch for ch in (number or "") if ch.isdigit())
+
+async def confirm_block_number(person_id: str, number: str) -> Elicit[Confirm]:
     who = await _person_label(person_id)
-    verb = "Block" if action.upper() == "BLOCK" else "Allow"
-    return Elicit(f"{verb} outgoing '{call_type}' calls for {who}?", Confirm)
+    return Elicit(f"Block calls to {number} for {who}?", Confirm)
+
+async def confirm_unblock_number(person_id: str, number: str) -> Elicit[Confirm]:
+    who = await _person_label(person_id)
+    return Elicit(f"Unblock calls to {number} for {who}?", Confirm)
 
 @mcp.tool()
 async def list_numbers(max_results: int = 25) -> dict:
@@ -221,72 +229,100 @@ async def update_call_forwarding(
             return {"updated": False, "reason": "Confirmation was declined or dismissed."}
 
 @mcp.tool()
-async def get_outgoing_permission(person_id: str) -> dict:
-    """Show a user's outgoing calling permissions — which categories of calls
-    (call types) the user is allowed to dial or is blocked from dialing. Identify
-    the user by their email address, their display name (e.g. 'Pod 0'), or their
-    Webex personId. Call types include TOLL_FREE (1-800 numbers), NATIONAL,
-    INTERNATIONAL, and others; each has an action of ALLOW or BLOCK. If a user
-    reports that a call to a number failed and their license, number, and device
-    are healthy, read this to see whether that number's call type is blocked.
-    Same setting an admin sees in Control Hub under the user's
-    Calling > Permissions > Outgoing calls."""
+async def list_blocked_numbers(person_id: str) -> dict:
+    """List the specific phone numbers a user is blocked from (or explicitly
+    allowed to) dial — their outgoing-permission digit patterns. Identify the
+    user by email, display name (e.g. 'Pod 0'), or Webex personId. Each entry has
+    a `name`, the `pattern` of digits it matches, and an `action` (BLOCK or
+    ALLOW). If a user reports that a call to one specific number failed while
+    other calls work, read this to see whether that number is blocked. Same list
+    an admin sees in Control Hub under the user's
+    Calling > Permissions > Outgoing Calls > Digit Patterns."""
     pid = await _resolve_person_id(person_id)
     if not pid:
         return {"error": f"Could not find a user matching '{person_id}'."}
     params = {"orgId": ORG_ID} if ORG_ID else {}
     async with httpx.AsyncClient(timeout=15) as http:
         r = await http.get(
-            f"https://webexapis.com/v1/people/{pid}/features/outgoingPermission",
+            f"https://webexapis.com/v1/telephony/config/people/{pid}/outgoingPermission/digitPatterns",
             headers=HEADERS, params=params
         )
     return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}: {r.text}"}
 
 @mcp.tool()
-async def update_outgoing_permission(
+async def block_number(
     person_id: str,
-    call_type: str = "TOLL_FREE",
-    action: str = "BLOCK",
-    confirm: Annotated[ElicitationResult[Confirm], Resolve(confirm_outgoing_permission)] = None,
+    number: str,
+    confirm: Annotated[ElicitationResult[Confirm], Resolve(confirm_block_number)] = None,
 ) -> dict:
-    """Allow or block a category of outgoing calls for a user. Identify the user
-    by their email address, their display name (e.g. 'Pod 0'), or their Webex
-    personId. Set `action` to BLOCK to stop the user dialing that `call_type`, or
-    ALLOW to permit it again. `call_type` is a Webex call category such as
-    TOLL_FREE (1-800 numbers), NATIONAL, or INTERNATIONAL. Blocking TOLL_FREE,
-    for example, makes calls to 1-800 numbers fail for that user until you set it
-    back to ALLOW. The server asks you to confirm first. Same setting an admin
-    sees in Control Hub under the user's Calling > Permissions > Outgoing calls."""
-    action = action.upper()
+    """Block a user from dialing one specific phone number. Identify the user by
+    email, display name (e.g. 'Pod 0'), or Webex personId, and pass the `number`
+    to block (e.g. '1-800-444-4444'). This turns on the user's custom digit
+    patterns and adds a BLOCK pattern for that number, so calls to it fail for
+    that user until you unblock it. The server asks you to confirm first."""
     match confirm:
         case AcceptedElicitation(data=Confirm(ok=True)):
             pid = await _resolve_person_id(person_id)
             if not pid:
                 return {"error": f"Could not find a user matching '{person_id}'."}
+            digits = _digits(number)
+            if not digits:
+                return {"error": f"'{number}' has no dialable digits."}
             params = {"orgId": ORG_ID} if ORG_ID else {}
-            url = f"https://webexapis.com/v1/people/{pid}/features/outgoingPermission"
+            base = f"https://webexapis.com/v1/telephony/config/people/{pid}/outgoingPermission/digitPatterns"
             async with httpx.AsyncClient(timeout=15) as http:
-                current = await http.get(url, headers=HEADERS, params=params)
-                if current.status_code != 200:
-                    return {"error": f"HTTP {current.status_code}: {current.text}"}
-                permissions = current.json().get("callingPermissions", [])
-                found = False
-                for perm in permissions:
-                    if perm.get("callType") == call_type:
-                        perm["action"] = action
-                        found = True
-                if not found:
-                    return {"error": f"Unknown call type '{call_type}'."}
-                payload = {"useCustomEnabled": True, "callingPermissions": permissions}
-                r = await http.put(url, headers=HEADERS, params=params, json=payload)
-            if r.status_code not in (200, 204):
+                # Enable custom digit patterns so the block is actually enforced.
+                cat = await http.put(base, headers=HEADERS, params=params,
+                                     json={"useCustomDigitPatterns": True})
+                if cat.status_code not in (200, 204):
+                    return {"error": f"HTTP {cat.status_code}: {cat.text}"}
+                r = await http.post(base, headers=HEADERS, params=params,
+                                    json={"name": f"block-{digits}", "pattern": digits,
+                                          "action": "BLOCK", "transferEnabled": False})
+            if r.status_code not in (200, 201):
                 return {"error": f"HTTP {r.status_code}: {r.text}"}
-            return {"updated": True, "person_id": person_id,
-                    "call_type": call_type, "action": action}
+            return {"blocked": True, "person_id": person_id, "number": digits}
         case AcceptedElicitation():
-            return {"updated": False, "reason": "You chose not to change outgoing permissions."}
+            return {"blocked": False, "reason": "You chose not to block the number."}
         case DeclinedElicitation() | CancelledElicitation():
-            return {"updated": False, "reason": "Confirmation was declined or dismissed."}
+            return {"blocked": False, "reason": "Confirmation was declined or dismissed."}
+
+@mcp.tool()
+async def unblock_number(
+    person_id: str,
+    number: str,
+    confirm: Annotated[ElicitationResult[Confirm], Resolve(confirm_unblock_number)] = None,
+) -> dict:
+    """Remove a block on a specific phone number for a user (the reverse of
+    block_number). Identify the user by email, display name (e.g. 'Pod 0'), or
+    Webex personId, and pass the `number` to unblock. This deletes the matching
+    BLOCK digit pattern so the user can dial the number again. The server asks
+    you to confirm first."""
+    match confirm:
+        case AcceptedElicitation(data=Confirm(ok=True)):
+            pid = await _resolve_person_id(person_id)
+            if not pid:
+                return {"error": f"Could not find a user matching '{person_id}'."}
+            digits = _digits(number)
+            params = {"orgId": ORG_ID} if ORG_ID else {}
+            base = f"https://webexapis.com/v1/telephony/config/people/{pid}/outgoingPermission/digitPatterns"
+            async with httpx.AsyncClient(timeout=15) as http:
+                listing = await http.get(base, headers=HEADERS, params=params)
+                if listing.status_code != 200:
+                    return {"error": f"HTTP {listing.status_code}: {listing.text}"}
+                matches = [p for p in listing.json().get("digitPatterns", [])
+                           if _digits(p.get("pattern", "")) == digits]
+                if not matches:
+                    return {"unblocked": False, "reason": f"No block found for {digits}."}
+                for p in matches:
+                    d = await http.delete(f"{base}/{p['id']}", headers=HEADERS, params=params)
+                    if d.status_code not in (200, 204):
+                        return {"error": f"HTTP {d.status_code}: {d.text}"}
+            return {"unblocked": True, "person_id": person_id, "number": digits}
+        case AcceptedElicitation():
+            return {"unblocked": False, "reason": "You chose not to unblock the number."}
+        case DeclinedElicitation() | CancelledElicitation():
+            return {"unblocked": False, "reason": "Confirmation was declined or dismissed."}
 
 if __name__ == "__main__":
     log.info("webex-calling-complex running on stdio - waiting for a client (Ctrl+C to stop).")
