@@ -33,19 +33,49 @@ mcp = MCPServer("webex-calling-complex")
 class Confirm(BaseModel):
     ok: bool
 
-async def _person_label(person_id: str) -> str:
-    """Resolve a personId to a human-readable label (display name or email) for
-    confirmation cards, so users never see a raw base64 ID. Falls back to the id."""
+# A Webex Hydra personId is base64 of "ciscospark://..."; it always starts with
+# this prefix. Anything else we receive is an email or a display name to resolve.
+_PERSON_ID_PREFIX = "Y2lzY29zcGFyazov"
+
+async def _resolve_person_id(person: str) -> str:
+    """Accept an email address, a display name (e.g. 'Pod 0'), or a Webex
+    personId, and return a personId. Emails and names are resolved through the
+    People API; a personId is returned as-is. Returns '' when nothing matches."""
+    if not person:
+        return ""
+    if person.startswith(_PERSON_ID_PREFIX):
+        return person  # already a personId
+    params = {"orgId": ORG_ID} if ORG_ID else {}
+    params["email" if "@" in person else "displayName"] = person
     try:
         async with httpx.AsyncClient(timeout=10) as http:
-            r = await http.get(f"https://webexapis.com/v1/people/{person_id}", headers=HEADERS)
+            r = await http.get("https://webexapis.com/v1/people", headers=HEADERS, params=params)
         if r.status_code == 200:
-            person = r.json()
-            emails = person.get("emails") or []
-            return person.get("displayName") or (emails[0] if emails else person_id)
+            items = r.json().get("items", [])
+            if items:
+                return items[0].get("id", "")
     except Exception:
         pass
-    return person_id
+    return ""
+
+async def _person_label(person: str) -> str:
+    """Human-readable label for a personId, email, or display name, so
+    confirmation cards never show a raw base64 ID. Falls back to a neutral
+    phrase rather than leaking an unresolved identifier."""
+    if not person:
+        return "the requested user"
+    if not person.startswith(_PERSON_ID_PREFIX):
+        return person  # an email or display name is already human-readable
+    try:
+        async with httpx.AsyncClient(timeout=10) as http:
+            r = await http.get(f"https://webexapis.com/v1/people/{person}", headers=HEADERS)
+        if r.status_code == 200:
+            data = r.json()
+            emails = data.get("emails") or []
+            return data.get("displayName") or (emails[0] if emails else "the requested user")
+    except Exception:
+        pass
+    return "the requested user"
 
 async def confirm_delete_device(device_id: str) -> Elicit[Confirm]:
     return Elicit(f"Delete device '{device_id}'? This cannot be undone.", Confirm)
@@ -134,12 +164,18 @@ async def delete_device(device_id: str, confirm: Annotated[ElicitationResult[Con
 
 @mcp.tool()
 async def get_call_forwarding(person_id: str) -> dict:
-    """Show a user's call forwarding settings. This is the same setting the
-    user sees in their Webex app under Settings > Calling > Call forwarding."""
+    """Show a user's call forwarding settings. Identify the user by their email
+    address, their display name (e.g. 'Pod 0'), or their Webex personId — pass
+    whichever the request gives you and the server resolves it. This is the same
+    setting the user sees in their Webex app under Settings > Calling >
+    Call forwarding."""
+    pid = await _resolve_person_id(person_id)
+    if not pid:
+        return {"error": f"Could not find a user matching '{person_id}'."}
     params = {"orgId": ORG_ID} if ORG_ID else {}
     async with httpx.AsyncClient(timeout=15) as http:
         r = await http.get(
-            f"https://webexapis.com/v1/people/{person_id}/features/callForwarding",
+            f"https://webexapis.com/v1/people/{pid}/features/callForwarding",
             headers=HEADERS, params=params
         )
     return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}: {r.text}"}
@@ -150,14 +186,19 @@ async def update_call_forwarding(
     forward_all_to: str = "",
     confirm: Annotated[ElicitationResult[Confirm], Resolve(confirm_call_forwarding)] = None,
 ) -> dict:
-    """Set or clear 'forward all calls' for a user. Pass forward_all_to as the
-    destination number to enable it, or leave it empty to turn forwarding off.
-    The server asks you to confirm first. This is the same setting the user
-    sees in their Webex app under Settings > Calling > Call forwarding."""
+    """Set or clear 'forward all calls' for a user. Identify the user by their
+    email address, their display name (e.g. 'Pod 0'), or their Webex personId.
+    Pass forward_all_to as the destination number to enable it, or leave it empty
+    to turn forwarding off. The server asks you to confirm first. This is the same
+    setting the user sees in their Webex app under Settings > Calling >
+    Call forwarding."""
     match confirm:
         case AcceptedElicitation(data=Confirm(ok=True)):
+            pid = await _resolve_person_id(person_id)
+            if not pid:
+                return {"error": f"Could not find a user matching '{person_id}'."}
             params = {"orgId": ORG_ID} if ORG_ID else {}
-            url = f"https://webexapis.com/v1/people/{person_id}/features/callForwarding"
+            url = f"https://webexapis.com/v1/people/{pid}/features/callForwarding"
             async with httpx.AsyncClient(timeout=15) as http:
                 current = await http.get(url, headers=HEADERS, params=params)
                 if current.status_code != 200:
@@ -182,17 +223,21 @@ async def update_call_forwarding(
 @mcp.tool()
 async def get_outgoing_permission(person_id: str) -> dict:
     """Show a user's outgoing calling permissions — which categories of calls
-    (call types) the user is allowed to dial or is blocked from dialing. Call
-    types include TOLL_FREE (1-800 numbers), NATIONAL, INTERNATIONAL, and
-    others; each has an action of ALLOW or BLOCK. If a user reports that a call
-    to a number failed and their license, number, and device are healthy, read
-    this to see whether that number's call type is blocked. Same setting an
-    admin sees in Control Hub under the user's Calling > Permissions >
-    Outgoing calls."""
+    (call types) the user is allowed to dial or is blocked from dialing. Identify
+    the user by their email address, their display name (e.g. 'Pod 0'), or their
+    Webex personId. Call types include TOLL_FREE (1-800 numbers), NATIONAL,
+    INTERNATIONAL, and others; each has an action of ALLOW or BLOCK. If a user
+    reports that a call to a number failed and their license, number, and device
+    are healthy, read this to see whether that number's call type is blocked.
+    Same setting an admin sees in Control Hub under the user's
+    Calling > Permissions > Outgoing calls."""
+    pid = await _resolve_person_id(person_id)
+    if not pid:
+        return {"error": f"Could not find a user matching '{person_id}'."}
     params = {"orgId": ORG_ID} if ORG_ID else {}
     async with httpx.AsyncClient(timeout=15) as http:
         r = await http.get(
-            f"https://webexapis.com/v1/people/{person_id}/features/outgoingPermission",
+            f"https://webexapis.com/v1/people/{pid}/features/outgoingPermission",
             headers=HEADERS, params=params
         )
     return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}: {r.text}"}
@@ -204,18 +249,22 @@ async def update_outgoing_permission(
     action: str = "BLOCK",
     confirm: Annotated[ElicitationResult[Confirm], Resolve(confirm_outgoing_permission)] = None,
 ) -> dict:
-    """Allow or block a category of outgoing calls for a user. Set `action` to
-    BLOCK to stop the user dialing that `call_type`, or ALLOW to permit it again.
-    `call_type` is a Webex call category such as TOLL_FREE (1-800 numbers),
-    NATIONAL, or INTERNATIONAL. Blocking TOLL_FREE, for example, makes calls to
-    1-800 numbers fail for that user until you set it back to ALLOW. The server
-    asks you to confirm first. Same setting an admin sees in Control Hub under
-    the user's Calling > Permissions > Outgoing calls."""
+    """Allow or block a category of outgoing calls for a user. Identify the user
+    by their email address, their display name (e.g. 'Pod 0'), or their Webex
+    personId. Set `action` to BLOCK to stop the user dialing that `call_type`, or
+    ALLOW to permit it again. `call_type` is a Webex call category such as
+    TOLL_FREE (1-800 numbers), NATIONAL, or INTERNATIONAL. Blocking TOLL_FREE,
+    for example, makes calls to 1-800 numbers fail for that user until you set it
+    back to ALLOW. The server asks you to confirm first. Same setting an admin
+    sees in Control Hub under the user's Calling > Permissions > Outgoing calls."""
     action = action.upper()
     match confirm:
         case AcceptedElicitation(data=Confirm(ok=True)):
+            pid = await _resolve_person_id(person_id)
+            if not pid:
+                return {"error": f"Could not find a user matching '{person_id}'."}
             params = {"orgId": ORG_ID} if ORG_ID else {}
-            url = f"https://webexapis.com/v1/people/{person_id}/features/outgoingPermission"
+            url = f"https://webexapis.com/v1/people/{pid}/features/outgoingPermission"
             async with httpx.AsyncClient(timeout=15) as http:
                 current = await http.get(url, headers=HEADERS, params=params)
                 if current.status_code != 200:

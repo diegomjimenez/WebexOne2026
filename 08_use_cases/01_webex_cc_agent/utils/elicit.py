@@ -107,13 +107,19 @@ def request(message, timeout=180):
     _pending[elicit_id] = {"event": event, "result": False,
                            "room": _current_room,
                            "message_id": card_msg_id}
-    resolved = event.wait(timeout=timeout)
-    entry = _pending.pop(elicit_id, {})
-    confirmed = entry.get("result", False)
-    if not resolved:
-        # Timeout — delete the zombie card and post expiry status.
-        _delete_card(entry.get("message_id"))
-        _post_status(entry.get("room"), _ACK_EXPIRED)
+    resolved = False
+    confirmed = False
+    try:
+        resolved = event.wait(timeout=timeout)
+    finally:
+        # Always clean up: whether we time out, are interrupted, or the wait
+        # raises, an unconfirmed card must never be left lingering in the room.
+        entry = _pending.pop(elicit_id, {})
+        confirmed = entry.get("result", False)
+        if not confirmed and not resolved:
+            # Timeout / interruption — delete the zombie card and post expiry.
+            _delete_card(entry.get("message_id") or card_msg_id)
+            _post_status(entry.get("room") or _current_room, _ACK_EXPIRED)
     log.info("Elicitation %s: %s", elicit_id,
              "confirmed" if confirmed else "declined/timed-out")
     return confirmed
