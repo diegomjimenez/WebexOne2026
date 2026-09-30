@@ -28,56 +28,81 @@ are simply "show me what happened".
   provisioned to call.
 - `get_call_forwarding` (calling server) — a user's call forwarding. If their
   inbound calls are not arriving, forwarding may be sending them elsewhere.
+- `get_outgoing_permission` (calling server) — which call types (TOLL_FREE,
+  NATIONAL, INTERNATIONAL, …) a user may dial. If a user cannot reach a
+  specific number and their provisioning is healthy, that number's call type
+  may be set to BLOCK here.
 
 ## Steps
 
-1. Identify the subject. A named subject is a person or a phone number — not a
-   location or device. Resolve a name like "Pod 0" with `list_people` (match on
-   display name or email) and a number with `list_numbers`; CDRs also carry a
-   `user` display name you can match directly. Do not ask whether
-   the subject is a user, location, or device. Only ask a clarifying question
-   when the request names no subject at all — and even then, offer to summarize
-   all calls in the window. The window itself is either a recent span or a
-   specific past date/time.
-2. Pull the records with `get_detailed_call_history`. For a recent window,
-   widen `hours_back` (max 12). When the user names a date or time, translate
-   it into `start_time`/`end_time` (UTC — a date like `2026-09-24` or an ISO
-   8601 timestamp like `2026-09-24T05:00:00Z`) and call the tool with that
-   **absolute** window. Do not fall back to the most recent 12 hours, and do
-   not decide the window is unreachable — it need not be near now; the window
-   is only capped at a 12-hour span and must end at least ~5 minutes in the
-   past. Then report exactly what the feed returns: the calls, an empty
-   window, or the API's error.
+1. Identify the subject — a person (resolve with `list_people`, matching display
+   name or email) or a number (`list_numbers`); CDRs also carry a `user` display
+   name you can match directly. If a user has multiple addresses, use all of
+   them to match their calls. If the request names no subject, summarize all
+   calls in the window. The window is either a recent span or a specific past
+   date/time.
+2. Pull the records with `get_detailed_call_history`. Call this tool **exactly
+   once per user request** — the CDR feed is rate-limited to roughly one request
+   per minute, so a second call fails with `429 Too Many Requests`. Your very
+   first call to this tool must already carry the right window: resolve the
+   subject and work out the window, then make one call. Never call it bare or
+   with empty parameters to "see recent calls" first — that reflexive pull wastes
+   the single request you get and makes the real query fail.
+   - If the user names a specific date or time, that single call MUST pass
+     `start_time` and `end_time` (UTC — a date or an ISO 8601 timestamp). Never
+     call with empty parameters when a date was requested: an empty call returns
+     only the last 12 hours ending now and will miss the requested window
+     entirely. The tool fully supports past windows — never claim otherwise.
+   - Only if the user just wants recent calls, call with `hours_back` (max 12)
+     and no start/end.
+
+   Do not fall back to the most recent 12 hours if a past date is requested. The
+   window is capped at a 12-hour span and must end at least ~5 minutes in the
+   past. Report exactly what the feed returns: the calls, an empty window, or the
+   API's error.
 3. Report the calls that match the user or number in question — who called
-   whom, when, how long, and the outcome. This alone answers most requests. If
-   you could not resolve the named subject, report all calls in the window and
-   say you could not narrow to that subject — do not block.
+   whom, when, how long, and the outcome. If the user asks you to summarize,
+   provide a summary instead of just listing every call. If you could not
+   resolve the named subject, report all calls in the window and say you could
+   not narrow to that subject — do not block.
 4. If every call succeeded, say so plainly and stop; there is nothing to fix.
 5. If one or more calls did not succeed, flag them and find out why:
-   - `unresolved_incidents` — rule out a platform outage first.
+   - `unresolved_incidents` — only relevant when the failure is happening now.
+     It lists currently-open outages and cannot explain a past-dated call. Cite
+     an incident only if it affects Webex Calling and overlaps the failure's
+     time; ignore incidents for other services (for example, Contact Center).
    - `list_people` / `list_licenses` — is the user active and licensed to call?
    - `list_numbers` / `list_devices` — do they own the number and have a
      registered device?
    - `get_call_forwarding` — if inbound calls are not arriving, is forwarding
      sending them elsewhere?
-   Correlate: no license or no number explains a user who cannot call; a
-   routing `outcomeReason` on otherwise healthy provisioning points at dial
-   plans or the destination, not the user.
+   - `get_outgoing_permission` — if the user cannot dial one specific number or
+     kind of number (for example a 1-800 toll-free number) while other calls
+     work, check whether that call type (TOLL_FREE, NATIONAL, INTERNATIONAL, …)
+     is set to BLOCK.
+   Correlate: no license or no number explains a user who cannot call; a call
+   that is rejected for one number type while others succeed on healthy
+   provisioning points at outgoing calling permissions; a routing
+   `outcomeReason` on otherwise healthy provisioning points at dial plans or the
+   destination, not the user.
 6. For any non-successful call, quote its `outcomeReason` — it is the API's
    own explanation and the single most useful field.
 
 ## Reporting a diagnosis
 
-Keep it short and evidence-based. Anchor every conclusion to the specific
-`outcomeReason` and the pattern you actually saw — for example, repeated
-`TemporarilyUnavailable` refusals within a few seconds usually means retries to
-an endpoint that was unregistered or unavailable; `CallRejected` on an
-international destination points at the outbound dial plan or the location's
-calling permission for that prefix, not the user. Name only the one or two most
-likely causes and offer at most two or three concrete next actions. Do not
-re-list the calls you already showed, do not hedge with a long list of "could
-be" possibilities, and skip incidental tool noise (for example, an unrelated
-404) that is not the cause.
+Keep the whole reply short. Name the most likely cause the evidence supports —
+anchored to the specific `outcomeReason` and the pattern you saw, not to a
+coincidental incident whose service or timeframe does not match — then stop
+reasoning. Do not infer a cause the `outcomeReason` does not state, and do not
+assume a fixed cause for a given reason; let the evidence drive it.
+
+End with one short list of one or two concrete next actions: specific tool calls
+you would run or a clear recommendation, never a conditional hedge ("if you have
+a dial plan id", "if possible", "may require permissions"). Give a single such
+list — not separate "what I can check", "what I can do", and "suggested next
+steps" sections. Do not re-list the calls you already showed, do not pad with a
+long list of possibilities, and skip incidental tool errors that are not the
+cause.
 
 ## Reading a CDR
 
@@ -106,9 +131,8 @@ confirm who owns the call.
 ## Guardrails
 
 - Reporting and investigation are read-only — do them freely.
-- For a management change (create/delete a workspace, location, or device, or
-  changing a user's call forwarding), call the tool directly; the server shows
-  a confirmation card and waits for approval. Never write to "fix" something
-  you were only asked to look at.
+- For a management change, call the tool directly; the server shows a
+  confirmation card and waits for approval. Never write to "fix" something you
+  were only asked to look at.
 - Only use IDs and numbers that came from a tool, and base every conclusion on
   a field a tool returned — never guess.

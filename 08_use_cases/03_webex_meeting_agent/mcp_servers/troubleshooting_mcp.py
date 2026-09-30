@@ -4,6 +4,7 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 - Diego Manuel Jimenez Moreno
 - Mo Eyad Musallam
 """
+import asyncio
 import logging
 import os
 import sys
@@ -104,15 +105,24 @@ def _parse_cdr_time(value: str) -> datetime:
 @mcp.tool()
 async def get_detailed_call_history(hours_back: int = 12, max_results: int = 500,
                                     start_time: str = "", end_time: str = "") -> dict:
-    """Get Webex Calling CDRs. Requires the Calling CDR role and scope.
+    """Get Webex Calling CDRs (call detail records).
 
-    With no start_time/end_time, returns the last `hours_back` hours (1-12,
-    default 12) ending now. To query a specific past window, pass start_time
-    and/or end_time as absolute UTC times — a date ('2026-09-24') or an ISO
-    8601 timestamp ('2026-09-24T05:00:00Z'). The window is NOT anchored to now;
-    any past window works. Webex only requires the span to be <= 12 hours and
-    the end to be at least ~5 minutes in the past (both enforced here). Pass the
-    window the user asked for and report what the feed returns.
+    Pick the window from the request:
+    1. The user names ANY date or time (e.g. "on 2026-09-24 between 05:00 and
+       08:30 UTC", "yesterday morning", "last Tuesday"): you MUST pass
+       `start_time` and `end_time` as absolute UTC values. Do NOT leave them empty
+       and do NOT use `hours_back` for a dated request — that returns the last 12
+       hours ending now and misses the window entirely. Past dates are fully
+       supported. Accepts 'YYYY-MM-DD' or ISO 8601. Example: for "2026-09-24
+       between 05:00 and 08:30 UTC" pass start_time="2026-09-24T05:00:00Z",
+       end_time="2026-09-24T08:30:00Z".
+    2. Only when the user gives no date and just wants recent calls: leave
+       start_time/end_time empty and use `hours_back` (1-12, default 12).
+
+    The tool automatically enforces the maximum 12-hour span.
+
+    Rate limit: call this at most once per user request. The CDR feed allows
+    roughly one request per minute; a second call returns 429 Too Many Requests.
     """
     max_results = max(500, min(max_results, 5000))
     latest = datetime.now(timezone.utc) - timedelta(minutes=6)
@@ -140,11 +150,20 @@ async def get_detailed_call_history(hours_back: int = 12, max_results: int = 500
         "max": max_results
     }
     async with httpx.AsyncClient(timeout=15) as http:
-        r = await http.get(
-            "https://analytics-calling.webexapis.com/v1/cdr_feed",
-            headers=HEADERS,
-            params=params
-        )
+        # The CDR feed is rate-limited to ~1 request/min. If we get a 429,
+        # wait (honoring Retry-After when present) and retry once.
+        for attempt in range(2):
+            r = await http.get(
+                "https://analytics-calling.webexapis.com/v1/cdr_feed",
+                headers=HEADERS,
+                params=params
+            )
+            if r.status_code != 429 or attempt == 1:
+                break
+            retry_after = r.headers.get("Retry-After", "")
+            wait = min(int(retry_after), 65) if retry_after.isdigit() else 60
+            log.info("CDR feed returned 429; waiting %ss before one retry.", wait)
+            await asyncio.sleep(wait)
     if r.status_code != 200:
         return {"error": f"HTTP {r.status_code}: {r.text}"}
     records = r.json().get("items", [])

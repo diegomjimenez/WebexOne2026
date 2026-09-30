@@ -33,15 +33,35 @@ mcp = MCPServer("webex-calling-complex")
 class Confirm(BaseModel):
     ok: bool
 
+async def _person_label(person_id: str) -> str:
+    """Resolve a personId to a human-readable label (display name or email) for
+    confirmation cards, so users never see a raw base64 ID. Falls back to the id."""
+    try:
+        async with httpx.AsyncClient(timeout=10) as http:
+            r = await http.get(f"https://webexapis.com/v1/people/{person_id}", headers=HEADERS)
+        if r.status_code == 200:
+            person = r.json()
+            emails = person.get("emails") or []
+            return person.get("displayName") or (emails[0] if emails else person_id)
+    except Exception:
+        pass
+    return person_id
+
 async def confirm_delete_device(device_id: str) -> Elicit[Confirm]:
     return Elicit(f"Delete device '{device_id}'? This cannot be undone.", Confirm)
 
 async def confirm_call_forwarding(person_id: str, forward_all_to: str) -> Elicit[Confirm]:
+    who = await _person_label(person_id)
     if forward_all_to:
-        msg = f"Forward all calls for user '{person_id}' to {forward_all_to}?"
+        msg = f"Forward all calls for {who} to {forward_all_to}?"
     else:
-        msg = f"Turn off 'forward all calls' for user '{person_id}'?"
+        msg = f"Turn off 'forward all calls' for {who}?"
     return Elicit(msg, Confirm)
+
+async def confirm_outgoing_permission(person_id: str, call_type: str, action: str) -> Elicit[Confirm]:
+    who = await _person_label(person_id)
+    verb = "Block" if action.upper() == "BLOCK" else "Allow"
+    return Elicit(f"{verb} outgoing '{call_type}' calls for {who}?", Confirm)
 
 @mcp.tool()
 async def list_numbers(max_results: int = 25) -> dict:
@@ -75,7 +95,7 @@ async def list_devices(max_results: int = 25) -> dict:
 async def list_dial_plans() -> dict:
     """List Call Routing dial plans."""
     async with httpx.AsyncClient(timeout=15) as http:
-        r = await http.get("https://webexapis.com/v1/telephony/config/dialPlans", headers=HEADERS)
+        r = await http.get("https://webexapis.com/v1/telephony/config/premisePstn/dialPlans", headers=HEADERS)
     return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}: {r.text}"}
 
 @mcp.tool()
@@ -156,6 +176,66 @@ async def update_call_forwarding(
                     "forward_all_to": forward_all_to}
         case AcceptedElicitation():
             return {"updated": False, "reason": "You chose not to change call forwarding."}
+        case DeclinedElicitation() | CancelledElicitation():
+            return {"updated": False, "reason": "Confirmation was declined or dismissed."}
+
+@mcp.tool()
+async def get_outgoing_permission(person_id: str) -> dict:
+    """Show a user's outgoing calling permissions — which categories of calls
+    (call types) the user is allowed to dial or is blocked from dialing. Call
+    types include TOLL_FREE (1-800 numbers), NATIONAL, INTERNATIONAL, and
+    others; each has an action of ALLOW or BLOCK. If a user reports that a call
+    to a number failed and their license, number, and device are healthy, read
+    this to see whether that number's call type is blocked. Same setting an
+    admin sees in Control Hub under the user's Calling > Permissions >
+    Outgoing calls."""
+    params = {"orgId": ORG_ID} if ORG_ID else {}
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get(
+            f"https://webexapis.com/v1/people/{person_id}/features/outgoingPermission",
+            headers=HEADERS, params=params
+        )
+    return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}: {r.text}"}
+
+@mcp.tool()
+async def update_outgoing_permission(
+    person_id: str,
+    call_type: str = "TOLL_FREE",
+    action: str = "BLOCK",
+    confirm: Annotated[ElicitationResult[Confirm], Resolve(confirm_outgoing_permission)] = None,
+) -> dict:
+    """Allow or block a category of outgoing calls for a user. Set `action` to
+    BLOCK to stop the user dialing that `call_type`, or ALLOW to permit it again.
+    `call_type` is a Webex call category such as TOLL_FREE (1-800 numbers),
+    NATIONAL, or INTERNATIONAL. Blocking TOLL_FREE, for example, makes calls to
+    1-800 numbers fail for that user until you set it back to ALLOW. The server
+    asks you to confirm first. Same setting an admin sees in Control Hub under
+    the user's Calling > Permissions > Outgoing calls."""
+    action = action.upper()
+    match confirm:
+        case AcceptedElicitation(data=Confirm(ok=True)):
+            params = {"orgId": ORG_ID} if ORG_ID else {}
+            url = f"https://webexapis.com/v1/people/{person_id}/features/outgoingPermission"
+            async with httpx.AsyncClient(timeout=15) as http:
+                current = await http.get(url, headers=HEADERS, params=params)
+                if current.status_code != 200:
+                    return {"error": f"HTTP {current.status_code}: {current.text}"}
+                permissions = current.json().get("callingPermissions", [])
+                found = False
+                for perm in permissions:
+                    if perm.get("callType") == call_type:
+                        perm["action"] = action
+                        found = True
+                if not found:
+                    return {"error": f"Unknown call type '{call_type}'."}
+                payload = {"useCustomEnabled": True, "callingPermissions": permissions}
+                r = await http.put(url, headers=HEADERS, params=params, json=payload)
+            if r.status_code not in (200, 204):
+                return {"error": f"HTTP {r.status_code}: {r.text}"}
+            return {"updated": True, "person_id": person_id,
+                    "call_type": call_type, "action": action}
+        case AcceptedElicitation():
+            return {"updated": False, "reason": "You chose not to change outgoing permissions."}
         case DeclinedElicitation() | CancelledElicitation():
             return {"updated": False, "reason": "Confirmation was declined or dismissed."}
 

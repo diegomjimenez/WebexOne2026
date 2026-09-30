@@ -38,7 +38,7 @@ def set_room(room_id):
     _current_room = room_id
 
 
-# Build the Cisco Live branded Adaptive Card for an elicitation.
+# Build the Adaptive Card for an elicitation.
 def card_json(message, elicit_id):
     return {
         "contentType": "application/vnd.microsoft.card.adaptive",
@@ -46,40 +46,10 @@ def card_json(message, elicit_id):
             "type": "AdaptiveCard",
             "body": [
                 {
-                    "type": "ColumnSet",
-                    "columns": [
-                        {
-                            "type": "Column",
-                            "items": [{
-                                "type": "Image",
-                                "style": "Person",
-                                "url": "https://securitydocs.cisco.com/Site%20images%20for%20Docs%20portal/Initial%20site%20images/Temp_Cisco-logo.png",
-                                "size": "Medium",
-                                "height": "50px",
-                            }],
-                            "width": "auto",
-                        },
-                        {
-                            "type": "Column",
-                            "items": [{
-                                "type": "TextBlock",
-                                "weight": "Bolder",
-                                "text": "webex one 2026!",
-                                "horizontalAlignment": "Left",
-                                "wrap": True,
-                                "color": "Light",
-                                "size": "Large",
-                                "spacing": "Small",
-                            }],
-                            "width": "stretch",
-                        },
-                    ],
-                },
-                {
                     "type": "TextBlock",
-                    "text": "⚠ Confirm Action",
+                    "text": "⚠ Confirmation Required",
                     "weight": "Bolder",
-                    "size": "Medium",
+                    "size": "Large",
                     "wrap": True,
                 },
                 {
