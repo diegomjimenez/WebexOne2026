@@ -4,8 +4,8 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 - Diego Manuel Jimenez Moreno
 - Mo Eyad Musallam
 """
-# capstone: prompt + resource + tools on the real Contact Center API.
-# All three MCP primitives in one server. Logs go to manage_address_books.log only.
+# capstone: resource + tools on the real Contact Center API.
+# Two MCP primitives in one server. Logs go to manage_address_books.log only.
 
 import logging
 import os
@@ -74,22 +74,6 @@ async def confirm_delete_book(address_book_id: str) -> Elicit[Confirm]:
 # Resolver for entry deletion.
 async def confirm_delete_entry(address_book_id: str, entry_id: str) -> Elicit[Confirm]:
     return Elicit(f"Delete entry '{entry_id}' from '{address_book_id}'? Cannot be undone.", Confirm)
-
-
-# Register a prompt that orchestrates the full address book setup workflow.
-@mcp.prompt()
-def set_up_address_book(book_name: str = "", team: str = "") -> str:
-    """Set up an address book end to end: create it and add its first contacts."""
-    log.debug("set_up_address_book prompt invoked (book_name=%r, team=%r)", book_name, team)
-    return (
-        f"Set up an address book called {book_name or '<book name>'} for the "
-        f"{team or '<team>'} team.\n\n"
-        "1. Read the lab://address-books resource and follow it.\n"
-        "2. Call list_address_books first - reuse a matching book, do not duplicate.\n"
-        "3. Otherwise call create_address_book and keep the id it returns.\n"
-        "4. Ask me for the contacts to add (name and E.164 number each).\n"
-        "5. Show me the list and, once I approve, call add_entry for each."
-    )
 
 
 # Register a resource with the house style for address books.

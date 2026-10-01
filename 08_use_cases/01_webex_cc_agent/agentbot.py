@@ -6,9 +6,9 @@ Webex One 2026 - Troubleshoot and Manage Your Organization with an AI Assistant
 
 Webex Contact Center agent — a self-contained use case.
 
-Everything this agent needs lives in this folder: the engine (utils/), the
-local tool (local_agent_tools/), the troubleshooting skill (skills/), and the
-two MCP servers (mcp_servers/). Nothing is imported from other labs.
+Everything this agent needs lives in this folder: the engine (utils/),
+the troubleshooting skill (skills/), and the two MCP servers (mcp_servers/).
+Nothing is imported from other labs.
 """
 
 import logging
@@ -22,7 +22,6 @@ from dotenv import load_dotenv
 # Own-folder imports — this folder is the import root.
 from utils import mcp_client, skills, elicit
 from utils.websocket import WebSocketClientCards
-from local_agent_tools import webex_status
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s")
@@ -88,11 +87,9 @@ mcp_client.set_elicit_bridge(elicit)
 # Discover skills, then build extra tools + dispatch for the agentic loop.
 skills_catalog = skills.discover(SKILLS_DIR)
 extra_tools = ([skills.tool_spec(skills_catalog)] if skills_catalog else []) \
-    + [webex_status.status_tool_spec()] \
     + mcp_client.get_prompt_tools()
 dispatch = {
     "load_skill": lambda a: skills.load_skill(skills_catalog, a.get("name", "")),
-    **webex_status.status_dispatch(),
     **mcp_client.get_prompt_dispatch(),
 }
 

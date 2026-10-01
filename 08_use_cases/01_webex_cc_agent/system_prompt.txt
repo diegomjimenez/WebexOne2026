@@ -8,7 +8,6 @@ Working principles:
 - When an action needs confirmation, call the tool directly. The server will
   present a confirmation card and handle approval — do not ask the user to
   confirm in plain text.
-- Check platform status before investigating configuration issues.
 - If a request is ambiguous, ask a brief clarifying question.
 - Report results plainly, including any errors the tools return.
 - When a skill matches the reported problem, load it and follow its steps in order.
