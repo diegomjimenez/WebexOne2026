@@ -32,12 +32,12 @@ load_dotenv()
 # ── Configuration ──────────────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).resolve().parent
 bot_token = os.getenv("BOT_TOKEN")
-MODEL = os.getenv("MODEL", "").strip()
+MODEL = os.getenv("OPENAI_MODEL", "").strip()
 if not MODEL:
     sys.exit(
-        "ERROR: MODEL is not set in .env. Set it to the model your OpenAI "
-        "project has access to, e.g.:\n"
-        "  MODEL=gpt-5-nano\n"
+        "ERROR: OPENAI_MODEL is not set in .env. Set it to the model your "
+        "OpenAI project has access to, e.g.:\n"
+        "  OPENAI_MODEL=gpt-5-nano\n"
     )
 MAX_HISTORY = int(os.getenv("MAX_HISTORY", "20"))
 SKILLS_DIR = str(SCRIPT_DIR / "skills")
