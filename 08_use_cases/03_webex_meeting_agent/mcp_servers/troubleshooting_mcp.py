@@ -248,7 +248,28 @@ async def list_ended_meetings(days_back: int = 30, max_results: int = 25,
         params["hostEmail"] = host_email
     async with httpx.AsyncClient(timeout=15) as http:
         r = await http.get("https://webexapis.com/v1/meetings", headers=HEADERS, params=params)
-    return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}: {r.text}"}
+    if r.status_code != 200:
+        return {"error": f"HTTP {r.status_code}: {r.text}"}
+    items = r.json().get("items", [])
+    def _host(m: dict) -> str:
+        # Webex masks the host email on some sites ("The value is hidden by
+        # portal"); drop that placeholder rather than surfacing it as noise.
+        email = m.get("hostEmail") or ""
+        return email if "@" in email else ""
+    return {
+        "count": len(items),
+        "meetings": [
+            {
+                "id": m.get("id"),
+                "title": m.get("title"),
+                "hostDisplayName": m.get("hostDisplayName"),
+                "hostEmail": _host(m),
+                "start": m.get("start"),
+                "end": m.get("end"),
+            }
+            for m in items
+        ],
+    }
 
 @mcp.tool()
 async def get_meeting_qualities(meeting_id: str) -> dict:
@@ -259,12 +280,17 @@ async def get_meeting_qualities(meeting_id: str) -> dict:
 
 @mcp.tool()
 async def list_meeting_participants(meeting_id: str) -> dict:
-    """Who attended an ended meeting and when. Returns each participant with their
-    join/leave times and per-device audio type. Use the ID from list_ended_meetings.
-    Pair with get_meeting_qualities to tie a quality dip to who was in the room then."""
+    """Who attended an ended meeting and when — name, email, join/leave times, and
+    the client/device/network each person used. Use the ID from list_ended_meetings.
+    Pair with get_meeting_qualities to tie a quality dip to who was in the room then.
+
+    Backed by the meeting qualities analytics feed (same endpoint as
+    get_meeting_qualities), so it needs only the analytics admin access this agent
+    already uses — not the separate meeting:admin_participants_read scope that the
+    standalone participants API requires."""
     async with httpx.AsyncClient(timeout=15) as http:
         r = await http.get(
-            "https://webexapis.com/v1/meetingParticipants",
+            "https://analytics.webexapis.com/v1/meeting/qualities",
             headers=HEADERS,
             params={"meetingId": meeting_id},
         )
@@ -275,22 +301,16 @@ async def list_meeting_participants(meeting_id: str) -> dict:
         "count": len(items),
         "participants": [
             {
-                "displayName": p.get("displayName"),
-                "email": p.get("email"),
-                "host": p.get("host"),
-                "coHost": p.get("coHost"),
-                "state": p.get("state"),
-                "joinedTime": p.get("joinedTime"),
-                "leftTime": p.get("leftTime"),
-                "devices": [
-                    {
-                        "deviceType": d.get("deviceType"),
-                        "audioType": d.get("audioType"),
-                        "joinedTime": d.get("joinedTime"),
-                        "leftTime": d.get("leftTime"),
-                    }
-                    for d in (p.get("devices") or [])
-                ],
+                "displayName": p.get("webexUserName"),
+                "email": p.get("webexUserEmail"),
+                "joinedTime": p.get("joinTime"),
+                "leftTime": p.get("leaveTime"),
+                "clientType": p.get("clientType"),
+                "osType": p.get("osType"),
+                "hardwareType": p.get("hardwareType"),
+                "networkType": p.get("networkType"),
+                "cameraName": p.get("cameraName"),
+                "microphoneName": p.get("microphoneName"),
             }
             for p in items
         ],

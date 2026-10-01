@@ -24,6 +24,9 @@ analysis only when the numbers show a problem.
   person's meetings rather than the whole org.
 - `get_meeting_qualities` (troubleshooting server) — per-participant
   audio/video metrics for one meeting id.
+- `list_meeting_participants` (troubleshooting server) — who attended an ended
+  meeting, with each participant's join/leave times and audio device. Use the
+  same `meeting_id` as `get_meeting_qualities`.
 
 ## Steps
 
@@ -37,14 +40,21 @@ analysis only when the numbers show a problem.
 3. Only when the request is about how a meeting went (quality, audio/video, who
    was affected): for each meeting, call `get_meeting_qualities` with
    `meeting_id` set to the `id` from step 2.
-4. Report the quality per participant — audio and video — with the actual
-   numbers. This answers most requests on its own.
-5. If everyone's media was fine, say so plainly; any complaint is likely about
-   content or scheduling, not the network.
-6. If a participant's media was poor, flag them and read the pattern:
+4. Lead with a one- or two-line verdict for the meeting: healthy, or which
+   participant(s) had trouble on audio or video. Keep it short — do not print a
+   metrics table for everyone.
+5. If everyone's media was fine, say so in a sentence and stop; any complaint is
+   likely about content or scheduling, not the network. Do not list per-metric
+   numbers for healthy participants.
+6. Only for a participant whose media was actually poor: name them and quote the
+   two or three numbers that prove it (the high jitter, the frame-rate collapse,
+   the loss), then read the pattern:
    - One participant bad, the rest fine → that participant's network or device.
    - Everyone degrades together, especially at the same time → a meeting-wide
      or network-path problem, not an individual.
+7. When the request is about *who* attended, or you need to tie a quality dip to
+   a specific person, call `list_meeting_participants` with the same `meeting_id`
+   and line the join/leave timeline up against the metrics.
 
 ## What "poor" means
 
