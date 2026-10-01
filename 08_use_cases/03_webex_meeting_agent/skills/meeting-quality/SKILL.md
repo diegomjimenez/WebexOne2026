@@ -60,9 +60,33 @@ analysis only when the numbers show a problem.
 
 For each participant and media type (audio, video), treat it as poor when, for
 a sustained period: packet loss is high (well above a fraction of a percent),
-latency / round-trip time is high enough to disrupt conversation, jitter is
-high (the usual cause of choppy audio), or video resolution/bitrate collapses.
-Quote the numbers you found — they are the evidence.
+latency / round-trip time is high enough to disrupt conversation (hundreds of
+ms), jitter is high (the usual cause of choppy audio), or video
+resolution/bitrate collapses. Quote the numbers you found — they are the
+evidence.
+
+Judge "poor" mainly on **packet loss and latency/jitter**. A low video frame
+rate on a short or low-motion call (a 1:1, a static screen) is normal — do not
+flag it as a problem on its own.
+
+### Reading the raw values — do this before you judge anything
+
+- **`-1` means "not measured", not zero.** It is a sentinel for a missing
+  sample. Never read `-1` as "no video", "no frames", or "no audio", and never
+  report it as a failure. If a stream is all `-1`, that metric simply was not
+  captured for that participant — say nothing was recorded, do not infer an
+  outage. The same goes for empty streams.
+- **A participant can send fine while inbound is unmeasured.** If `videoIn` is
+  all `-1` but `videoOut` shows real frame rates and bitrate, that person's
+  video was working — only the inbound measurement is missing.
+- **Attribute every number to the right person.** A latency or jitter value
+  belongs only to the participant whose record it came from. Never carry one
+  participant's number over to another.
+- **Values are usually `[start, end]` pairs.** A bitrate or frame rate dropping
+  to 0/`-1` at the very end often just means that person left before the meeting
+  ended — not a failure.
+- **No packet loss + sub-100 ms latency + single-digit jitter = healthy**, even
+  if frame rates are low or many fields are `-1`.
 
 `list_ended_meetings` gives the `id`; pass it as `meeting_id` to
 `get_meeting_qualities`, which returns the per-participant items.
@@ -82,3 +106,5 @@ Quote the numbers you found — they are the evidence.
 - Only use a `meeting_id` returned by `list_ended_meetings`; never guess one.
 - Every "poor" flag must cite the metric and value from the tool result;
   never invent participants or numbers.
+- `-1` is "not measured", never a measurement. Do not turn it into "no video",
+  "no frames", or an outage, and do not score it as poor.

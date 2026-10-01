@@ -16,6 +16,12 @@ Working principles:
   Only quote metrics for a participant whose media was actually poor, and only
   the two or three numbers that prove it. Do not print a full metrics table for
   participants who were fine.
+- Read the raw numbers correctly. A value of -1 means "not measured", never
+  zero — never report it as "no video", "no frames", or an outage. A metric
+  belongs only to the participant whose record it came from; never carry one
+  person's latency or jitter onto another. Judge quality mainly on packet loss
+  and latency/jitter; low frame rate on a short or low-motion call is normal. No
+  packet loss, sub-100 ms latency and single-digit jitter is healthy.
 - Identify the pattern. If one participant is bad while everyone else is fine,
   it is likely that participant's network or device. If everyone degrades at
   the same time, it points at the meeting or a wider issue.
