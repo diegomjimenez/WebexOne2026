@@ -19,7 +19,9 @@ analysis only when the numbers show a problem.
 ## Tools you use
 
 - `list_ended_meetings` (troubleshooting server) — meetings that already
-  ended, each with an `id`, title, and start/end.
+  ended, each with an `id`, title, and start/end. When the request names a
+  specific user, pass their email as `host_email` to scope the list to that
+  person's meetings rather than the whole org.
 - `get_meeting_qualities` (troubleshooting server) — per-participant
   audio/video metrics for one meeting id.
 
@@ -28,8 +30,10 @@ analysis only when the numbers show a problem.
 1. Clarify scope only if it is missing: which meeting (title/host) or which
    window to review, and whether the whole meeting or one participant.
 2. Call `list_ended_meetings` for the window and pick the meeting(s) that
-   match. Note each `id`. **If the user only asked to list or find meetings,
-   stop here and report the list — do not pull quality data unasked.**
+   match. When the request is about a specific user, pass their email as
+   `host_email` so you only pull that person's meetings, not the whole org.
+   Note each `id`. **If the user only asked to list or find meetings, stop here
+   and report the list — do not pull quality data unasked.**
 3. Only when the request is about how a meeting went (quality, audio/video, who
    was affected): for each meeting, call `get_meeting_qualities` with
    `meeting_id` set to the `id` from step 2.

@@ -222,13 +222,19 @@ async def list_admin_audit_events(days_back: int = 7, max_results: int = 25) -> 
     }
 
 @mcp.tool()
-async def list_ended_meetings(days_back: int = 30, max_results: int = 25) -> dict:
+async def list_ended_meetings(days_back: int = 30, max_results: int = 25,
+                              host_email: str = "") -> dict:
     """List meetings that already ended, so their IDs can be used for quality analysis.
 
     `days_back` is how far back to look (default 30). When the user names a window
     ("last 7 days", "this month", "last 60 days"), pass that number here — do NOT
     rely on the default. Meeting history is often sparse, so prefer a wide window
-    when the user does not specify one."""
+    when the user does not specify one.
+
+    `host_email` scopes the list to meetings hosted by one person. When the user
+    asks about a specific user ("meetings <someone> hosted", "<someone>'s
+    meetings"), pass their email here instead of listing the whole org — that is
+    the realistic, targeted query. Requires admin rights over that user."""
     now = datetime.now(timezone.utc)
     past = now - timedelta(days=max(1, days_back))
     params = {
@@ -238,6 +244,8 @@ async def list_ended_meetings(days_back: int = 30, max_results: int = 25) -> dic
         "to": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "max": max_results
     }
+    if host_email:
+        params["hostEmail"] = host_email
     async with httpx.AsyncClient(timeout=15) as http:
         r = await http.get("https://webexapis.com/v1/meetings", headers=HEADERS, params=params)
     return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}: {r.text}"}
