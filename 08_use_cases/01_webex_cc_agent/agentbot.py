@@ -63,7 +63,7 @@ def load_persona():
     )
 
 
-# ── Connect to this agent's own MCP servers (06 address books, 07 profiles) ─
+# ── Connect to this agent's own MCP servers (address books, desktop profiles) ─
 _configs = [
     {
         "name": "address-books",
