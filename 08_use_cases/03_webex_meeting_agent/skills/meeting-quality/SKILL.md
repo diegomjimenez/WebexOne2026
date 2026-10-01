@@ -28,9 +28,11 @@ analysis only when the numbers show a problem.
 1. Clarify scope only if it is missing: which meeting (title/host) or which
    window to review, and whether the whole meeting or one participant.
 2. Call `list_ended_meetings` for the window and pick the meeting(s) that
-   match. Note each `id`.
-3. For each meeting, call `get_meeting_qualities` with `meeting_id` set to the
-   `id` from step 2.
+   match. Note each `id`. **If the user only asked to list or find meetings,
+   stop here and report the list — do not pull quality data unasked.**
+3. Only when the request is about how a meeting went (quality, audio/video, who
+   was affected): for each meeting, call `get_meeting_qualities` with
+   `meeting_id` set to the `id` from step 2.
 4. Report the quality per participant — audio and video — with the actual
    numbers. This answers most requests on its own.
 5. If everyone's media was fine, say so plainly; any complaint is likely about

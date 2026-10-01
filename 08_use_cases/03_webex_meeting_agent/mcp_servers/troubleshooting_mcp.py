@@ -222,10 +222,15 @@ async def list_admin_audit_events(days_back: int = 7, max_results: int = 25) -> 
     }
 
 @mcp.tool()
-async def list_ended_meetings(days_back: int = 7, max_results: int = 25) -> dict:
-    """List meetings that already ended, so their IDs can be used for quality analysis."""
+async def list_ended_meetings(days_back: int = 30, max_results: int = 25) -> dict:
+    """List meetings that already ended, so their IDs can be used for quality analysis.
+
+    `days_back` is how far back to look (default 30). When the user names a window
+    ("last 7 days", "this month", "last 60 days"), pass that number here — do NOT
+    rely on the default. Meeting history is often sparse, so prefer a wide window
+    when the user does not specify one."""
     now = datetime.now(timezone.utc)
-    past = now - timedelta(days=days_back)
+    past = now - timedelta(days=max(1, days_back))
     params = {
         "meetingType": "meeting",
         "state": "ended",
@@ -243,6 +248,45 @@ async def get_meeting_qualities(meeting_id: str) -> dict:
     async with httpx.AsyncClient(timeout=15) as http:
         r = await http.get("https://analytics.webexapis.com/v1/meeting/qualities", headers=HEADERS, params={"meetingId": meeting_id})
     return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}: {r.text}"}
+
+@mcp.tool()
+async def list_meeting_participants(meeting_id: str) -> dict:
+    """Who attended an ended meeting and when. Returns each participant with their
+    join/leave times and per-device audio type. Use the ID from list_ended_meetings.
+    Pair with get_meeting_qualities to tie a quality dip to who was in the room then."""
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get(
+            "https://webexapis.com/v1/meetingParticipants",
+            headers=HEADERS,
+            params={"meetingId": meeting_id},
+        )
+    if r.status_code != 200:
+        return {"error": f"HTTP {r.status_code}: {r.text}"}
+    items = r.json().get("items", [])
+    return {
+        "count": len(items),
+        "participants": [
+            {
+                "displayName": p.get("displayName"),
+                "email": p.get("email"),
+                "host": p.get("host"),
+                "coHost": p.get("coHost"),
+                "state": p.get("state"),
+                "joinedTime": p.get("joinedTime"),
+                "leftTime": p.get("leftTime"),
+                "devices": [
+                    {
+                        "deviceType": d.get("deviceType"),
+                        "audioType": d.get("audioType"),
+                        "joinedTime": d.get("joinedTime"),
+                        "leftTime": d.get("leftTime"),
+                    }
+                    for d in (p.get("devices") or [])
+                ],
+            }
+            for p in items
+        ],
+    }
 
 @mcp.tool()
 async def list_report_templates(service: str = "") -> dict:
