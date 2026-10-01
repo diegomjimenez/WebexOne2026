@@ -32,6 +32,9 @@ are simply "show me what happened".
   blocked from dialing (outgoing-permission digit patterns). If a user cannot
   reach one particular number while other calls work, that number may have a
   BLOCK pattern here.
+- `get_calling_permissions` (calling server) — a user's outgoing permissions by
+  call type. If a user cannot reach a whole category of numbers while other
+  calls work, check whether that call type is set to BLOCK here.
 
 ## Steps
 
@@ -79,10 +82,13 @@ are simply "show me what happened".
    - `list_blocked_numbers` — if the user cannot dial one specific number (for
      example 1-800-444-4444) while other calls work, check whether that number
      has a BLOCK digit pattern.
+   - `get_calling_permissions` — if the user cannot dial a number, check whether
+     that calls or call type (e.g. TOLL_FREE) is set to BLOCK.
    Correlate: no license or no number explains a user who cannot call; a call
-   that is rejected for one specific number while others succeed on healthy
-   provisioning points at a blocked digit pattern; a routing `outcomeReason` on
-   otherwise healthy provisioning points at dial plans or the destination, not
+   rejected for one specific number while others succeed on healthy provisioning
+   points at a blocked digit pattern; a whole call type failing (e.g. all
+   toll-free) points at a blocked call-type permission; a routing `outcomeReason`
+   on otherwise healthy provisioning points at dial plans or the destination, not
    the user.
 6. For any non-successful call, quote its `outcomeReason` — it is the API's
    own explanation and the single most useful field.

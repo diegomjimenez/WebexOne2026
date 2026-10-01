@@ -322,6 +322,7 @@ def agentic_loop(messages, model, max_iter=10,
         if not choice.message.tool_calls:
             return choice.message.content or ""
         msgs.append(choice.message.model_dump())
+        declined = False
         for tc in choice.message.tool_calls:
             args = json.loads(tc.function.arguments) if tc.function.arguments else {}
             if dispatch and tc.function.name in dispatch:
@@ -329,6 +330,14 @@ def agentic_loop(messages, model, max_iter=10,
             else:
                 result = call_tool(tc.function.name, args)
             msgs.append({"role": "tool", "tool_call_id": tc.id, "content": result})
+            # A confirmation card that was declined or left to expire. Stop here:
+            # do not let the model chase the request with another gated tool
+            # (which would post card after card). The user can ask again to retry.
+            if isinstance(result, str) and "Confirmation was declined or dismissed" in result:
+                declined = True
+        if declined:
+            return ("The confirmation card expired or was declined, so nothing "
+                    "was changed. Ask again when you're ready to confirm.")
     return "Hit tool-call limit — try a simpler request."
 
 

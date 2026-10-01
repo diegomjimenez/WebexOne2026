@@ -45,8 +45,9 @@ async def _resolve_person_id(person: str) -> str:
         return ""
     if person.startswith(_PERSON_ID_PREFIX):
         return person  # already a personId
-    params = {"orgId": ORG_ID} if ORG_ID else {}
-    params["email" if "@" in person else "displayName"] = person
+    # The People API rejects a raw-UUID orgId (it wants the base64 Hydra id) and
+    # the token is already scoped to one org, so we omit orgId here.
+    params = {"email" if "@" in person else "displayName": person}
     try:
         async with httpx.AsyncClient(timeout=10) as http:
             r = await http.get("https://webexapis.com/v1/people", headers=HEADERS, params=params)
@@ -100,6 +101,14 @@ async def confirm_block_number(person_id: str, number: str) -> Elicit[Confirm]:
 async def confirm_unblock_number(person_id: str, number: str) -> Elicit[Confirm]:
     who = await _person_label(person_id)
     return Elicit(f"Unblock calls to {number} for {who}?", Confirm)
+
+async def confirm_block_toll_free(person_id: str) -> Elicit[Confirm]:
+    who = await _person_label(person_id)
+    return Elicit(f"Block all toll-free (1-800/888/…) calls for {who}?", Confirm)
+
+async def confirm_unblock_toll_free(person_id: str) -> Elicit[Confirm]:
+    who = await _person_label(person_id)
+    return Elicit(f"Allow toll-free (1-800/888/…) calls for {who} again?", Confirm)
 
 @mcp.tool()
 async def list_numbers(max_results: int = 25) -> dict:
@@ -321,6 +330,106 @@ async def unblock_number(
             return {"unblocked": True, "person_id": person_id, "number": digits}
         case AcceptedElicitation():
             return {"unblocked": False, "reason": "You chose not to unblock the number."}
+        case DeclinedElicitation() | CancelledElicitation():
+            return {"unblocked": False, "reason": "Confirmation was declined or dismissed."}
+
+@mcp.tool()
+async def get_calling_permissions(person_id: str) -> dict:
+    """Show a user's outgoing calling permissions by call type — whether each
+    call type (TOLL_FREE, NATIONAL, INTERNATIONAL, …) is ALLOW or BLOCK, plus
+    whether the user is on custom settings (`useCustomEnabled`/
+    `useCustomPermissions`). Identify the user by email, display name (e.g.
+    'Pod 0'), or Webex personId. If a user reports a whole category of calls
+    failing (e.g. every toll-free number), read this to see if that call type is
+    set to BLOCK. Same view as Control Hub > user > Calling > Permissions >
+    Outgoing Calls > Permissions by type."""
+    pid = await _resolve_person_id(person_id)
+    if not pid:
+        return {"error": f"Could not find a user matching '{person_id}'."}
+    params = {"orgId": ORG_ID} if ORG_ID else {}
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get(
+            f"https://webexapis.com/v1/people/{pid}/features/outgoingPermission",
+            headers=HEADERS, params=params
+        )
+    return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}: {r.text}"}
+
+async def _set_toll_free_action(pid: str, action: str) -> dict:
+    """Set the TOLL_FREE call-type permission to ALLOW or BLOCK for a user,
+    switching them to custom outgoing permissions so the change takes effect.
+    Reads the current permission set, flips only the TOLL_FREE entry, and writes
+    it back. Returns the updated result or an error dict."""
+    params = {"orgId": ORG_ID} if ORG_ID else {}
+    url = f"https://webexapis.com/v1/people/{pid}/features/outgoingPermission"
+    async with httpx.AsyncClient(timeout=15) as http:
+        current = await http.get(url, headers=HEADERS, params=params)
+        if current.status_code != 200:
+            return {"error": f"HTTP {current.status_code}: {current.text}"}
+        data = current.json()
+        perms = data.get("callingPermissions", [])
+        found = False
+        for entry in perms:
+            if entry.get("callType") == "TOLL_FREE":
+                entry["action"] = action
+                # Enforce the restriction so a BLOCK actually applies.
+                entry["isCallTypeRestrictionEnabled"] = (action == "BLOCK")
+                found = True
+        if not found:
+            perms.append({"callType": "TOLL_FREE", "action": action,
+                          "transferEnabled": False,
+                          "isCallTypeRestrictionEnabled": action == "BLOCK"})
+        body = {"useCustomEnabled": True, "useCustomPermissions": True,
+                "callingPermissions": perms}
+        r = await http.put(url, headers=HEADERS, params=params, json=body)
+    if r.status_code not in (200, 204):
+        return {"error": f"HTTP {r.status_code}: {r.text}"}
+    return {}
+
+@mcp.tool()
+async def block_toll_free(
+    person_id: str,
+    confirm: Annotated[ElicitationResult[Confirm], Resolve(confirm_block_toll_free)] = None,
+) -> dict:
+    """Block a user from dialing ALL toll-free numbers (1-800/888/877/…) by
+    setting their TOLL_FREE outgoing call-type permission to BLOCK. Identify the
+    user by email, display name (e.g. 'Pod 0'), or Webex personId. This switches
+    the user to custom outgoing permissions so the block takes effect. Use this
+    for the whole toll-free category; to block a single specific number instead,
+    use block_number. The server asks you to confirm first."""
+    match confirm:
+        case AcceptedElicitation(data=Confirm(ok=True)):
+            pid = await _resolve_person_id(person_id)
+            if not pid:
+                return {"error": f"Could not find a user matching '{person_id}'."}
+            err = await _set_toll_free_action(pid, "BLOCK")
+            if err:
+                return err
+            return {"blocked": True, "person_id": person_id, "callType": "TOLL_FREE"}
+        case AcceptedElicitation():
+            return {"blocked": False, "reason": "You chose not to block toll-free calls."}
+        case DeclinedElicitation() | CancelledElicitation():
+            return {"blocked": False, "reason": "Confirmation was declined or dismissed."}
+
+@mcp.tool()
+async def unblock_toll_free(
+    person_id: str,
+    confirm: Annotated[ElicitationResult[Confirm], Resolve(confirm_unblock_toll_free)] = None,
+) -> dict:
+    """Allow a user to dial toll-free numbers again (the reverse of
+    block_toll_free) by setting their TOLL_FREE outgoing call-type permission
+    back to ALLOW. Identify the user by email, display name (e.g. 'Pod 0'), or
+    Webex personId. The server asks you to confirm first."""
+    match confirm:
+        case AcceptedElicitation(data=Confirm(ok=True)):
+            pid = await _resolve_person_id(person_id)
+            if not pid:
+                return {"error": f"Could not find a user matching '{person_id}'."}
+            err = await _set_toll_free_action(pid, "ALLOW")
+            if err:
+                return err
+            return {"unblocked": True, "person_id": person_id, "callType": "TOLL_FREE"}
+        case AcceptedElicitation():
+            return {"unblocked": False, "reason": "You chose not to change toll-free permissions."}
         case DeclinedElicitation() | CancelledElicitation():
             return {"unblocked": False, "reason": "Confirmation was declined or dismissed."}
 
