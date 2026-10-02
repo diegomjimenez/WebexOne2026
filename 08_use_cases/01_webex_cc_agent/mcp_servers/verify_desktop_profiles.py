@@ -75,9 +75,27 @@ class Confirm(BaseModel):
 
 # Resolver for desktop-profile update.
 async def confirm_update(id: str, addressBookId: str) -> Elicit[Confirm]:
+    profile_label = id
+    book_label = addressBookId
+    try:
+        async with httpx.AsyncClient(timeout=10) as http:
+            pr = await http.get(f"{ORG}{PROFILE_BY_ID_PATH}/{id}", headers=HEADERS)
+            if pr.status_code == 200:
+                name = pr.json().get("name")
+                if name:
+                    profile_label = f"{name} ({id[:8]}…)"
+            br = await http.get(f"{ORG}/v3/address-book", headers=HEADERS,
+                                params={"pageSize": 100})
+            if br.status_code == 200:
+                for b in br.json().get("data", []):
+                    if b.get("id") == addressBookId:
+                        book_label = f"{b['name']} ({addressBookId[:8]}…)"
+                        break
+    except Exception:
+        log.debug("confirm_update: name lookup failed, using raw IDs")
     return Elicit(
-        f"Update desktop profile '{id}' to use address book "
-        f"'{addressBookId}'? This affects ALL agents assigned to this profile.",
+        f"Update desktop profile '{profile_label}' to use address book "
+        f"'{book_label}'? This affects ALL agents assigned to this profile.",
         Confirm,
     )
 

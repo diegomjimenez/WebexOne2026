@@ -68,12 +68,46 @@ class Confirm(BaseModel):
 
 # Resolver for address book deletion.
 async def confirm_delete_book(address_book_id: str) -> Elicit[Confirm]:
-    return Elicit(f"Delete address book '{address_book_id}'? This cannot be undone.", Confirm)
+    book_label = address_book_id
+    try:
+        async with httpx.AsyncClient(timeout=10) as http:
+            r = await http.get(f"{ORG}/v3/address-book", headers=HEADERS,
+                               params={"pageSize": 100})
+            if r.status_code == 200:
+                for b in r.json().get("data", []):
+                    if b.get("id") == address_book_id:
+                        book_label = f"{b['name']} ({address_book_id[:8]}…)"
+                        break
+    except Exception:
+        log.debug("confirm_delete_book: name lookup failed, using raw ID")
+    return Elicit(f"Delete address book '{book_label}'? This cannot be undone.", Confirm)
 
 
 # Resolver for entry deletion.
 async def confirm_delete_entry(address_book_id: str, entry_id: str) -> Elicit[Confirm]:
-    return Elicit(f"Delete entry '{entry_id}' from '{address_book_id}'? Cannot be undone.", Confirm)
+    book_label = address_book_id
+    entry_label = entry_id
+    try:
+        async with httpx.AsyncClient(timeout=10) as http:
+            r = await http.get(f"{ORG}/v3/address-book", headers=HEADERS,
+                               params={"pageSize": 100})
+            if r.status_code == 200:
+                for b in r.json().get("data", []):
+                    if b.get("id") == address_book_id:
+                        book_label = f"{b['name']} ({address_book_id[:8]}…)"
+                        break
+            er = await http.get(
+                f"{ORG}/v2/address-book/{address_book_id}/entry",
+                headers=HEADERS, params={"pageSize": 100},
+            )
+            if er.status_code == 200:
+                for e in er.json().get("data", []):
+                    if e.get("id") == entry_id:
+                        entry_label = f"{e['name']} ({entry_id[:8]}…)"
+                        break
+    except Exception:
+        log.debug("confirm_delete_entry: name lookup failed, using raw IDs")
+    return Elicit(f"Delete entry '{entry_label}' from '{book_label}'? Cannot be undone.", Confirm)
 
 
 # Register a resource with the house style for address books.
