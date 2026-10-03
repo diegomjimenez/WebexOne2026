@@ -83,7 +83,7 @@ are simply "show me what happened".
      example 1-800-444-4444) while other calls work, check whether that number
      has a BLOCK digit pattern.
    - `get_calling_permissions` — if the user cannot dial a number, check whether
-     that calls or call type (e.g. TOLL_FREE) is set to BLOCK.
+     that call or call type (e.g. TOLL_FREE) is set to BLOCK.
    Correlate: no license or no number explains a user who cannot call; a call
    rejected for one specific number while others succeed on healthy provisioning
    points at a blocked digit pattern; a whole call type failing (e.g. all
