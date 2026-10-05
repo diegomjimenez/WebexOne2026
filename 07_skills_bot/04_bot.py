@@ -35,7 +35,7 @@ except ImportError:
 
 MESSAGING_MCP_URL = "https://mcp.webexapis.com/mcp/webex-messaging"
 MEETING_MCP_URL = "https://mcp.webexapis.com/mcp/webex-meeting"
-CUSTOM_SERVER = LAB_ROOT / "03_custom_mcp" / "03_read_books.py"
+CUSTOM_SERVER = LAB_ROOT / "04_custom_mcp" / "03_read_books.py"
 SKILLS_DIR = Path(__file__).resolve().parent / "skills"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
