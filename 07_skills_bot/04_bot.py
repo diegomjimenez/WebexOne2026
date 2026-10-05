@@ -144,7 +144,7 @@ async def reply_with_assistant(message, sender, question):
         log.exception("Assistant turn failed")
         bot.send_message(message["roomId"], "Sorry, I could not answer that right now.")
         return
-    bot.send_message(message["roomId"], reply, is_markdown=True)
+    bot.send_message(message["roomId"], reply)
     log.info(f"Sent to {sender}: {reply}")
 
 
